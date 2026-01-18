@@ -934,10 +934,9 @@ Leave empty to allow all countries"></textarea>
         };
         
         // Initialize Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+        let app, auth, db;
         
+        // Global variables
         let currentAdmin = null;
         let currentWebsiteEditId = null;
         let usersPage = 1;
@@ -946,17 +945,49 @@ Leave empty to allow all countries"></textarea>
         let filteredUsers = [];
         let appConfig = {};
         
-        // Initialize
+        // Initialize Firebase and app
+        function initializeFirebase() {
+            try {
+                // Check if Firebase is already initialized
+                if (!firebase.apps.length) {
+                    app = firebase.initializeApp(firebaseConfig);
+                } else {
+                    app = firebase.app();
+                }
+                
+                auth = firebase.auth();
+                db = firebase.firestore();
+                
+                console.log("✅ Firebase initialized successfully");
+                return true;
+            } catch (error) {
+                console.error("❌ Firebase initialization failed:", error);
+                showToast('Failed to initialize Firebase. Please check your configuration.', 'error');
+                return false;
+            }
+        }
+        
+        // Initialize app when page loads
         window.onload = async () => {
             console.log("🚀 Admin Panel Loading...");
+            
+            // Initialize Firebase first
+            if (!initializeFirebase()) {
+                document.getElementById('login-error').querySelector('#error-message').textContent = 
+                    'Firebase initialization failed. Check console for details.';
+                document.getElementById('login-error').classList.remove('hidden');
+                return;
+            }
+            
             setupEventListeners();
             
             // Check if already logged in
             auth.onAuthStateChanged(async (user) => {
                 if (user) {
-                    currentAdmin = user;
+                    console.log("User detected:", user.email);
                     await checkAdminAccess(user);
                 } else {
+                    console.log("No user logged in, showing login modal");
                     showLoginModal();
                 }
             });
@@ -966,18 +997,21 @@ Leave empty to allow all countries"></textarea>
         async function checkAdminAccess(user) {
             showLoading();
             try {
+                console.log("Checking admin access for:", user.uid);
                 const adminDoc = await db.collection('adminUsers').doc(user.uid).get();
+                
                 if (adminDoc.exists) {
+                    console.log("Admin access granted");
                     currentAdmin = user;
                     await loadAdminPanel();
                 } else {
+                    console.log("Not an admin, logging out");
                     await auth.signOut();
                     showLoginModal();
                     showToast('Access denied. Admin privileges required.', 'error');
                 }
             } catch (error) {
                 console.error('Error checking admin access:', error);
-                await auth.signOut();
                 showLoginModal();
                 showToast('Error checking admin access', 'error');
             }
@@ -1003,12 +1037,27 @@ Leave empty to allow all countries"></textarea>
             showLoading();
             
             try {
+                console.log("Attempting login for:", email);
                 const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                console.log("Login successful:", userCredential.user.email);
                 await checkAdminAccess(userCredential.user);
                 
             } catch (error) {
                 hideLoading();
-                errorEl.querySelector('#error-message').textContent = error.message;
+                let errorMessage = error.message;
+                
+                // User-friendly error messages
+                if (error.code === 'auth/user-not-found') {
+                    errorMessage = 'User not found. Please check your email.';
+                } else if (error.code === 'auth/wrong-password') {
+                    errorMessage = 'Incorrect password. Please try again.';
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = 'Invalid email format.';
+                } else if (error.code === 'auth/too-many-requests') {
+                    errorMessage = 'Too many failed attempts. Please try again later.';
+                }
+                
+                errorEl.querySelector('#error-message').textContent = errorMessage;
                 errorEl.classList.remove('hidden');
                 console.error('Login error:', error);
             }
@@ -1027,8 +1076,11 @@ Leave empty to allow all countries"></textarea>
             showLoading();
             
             try {
+                console.log("Creating admin user:", email);
+                
                 // Create user in Firebase Auth
                 const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                console.log("Auth user created:", userCredential.user.uid);
                 
                 // Add to adminUsers collection
                 await db.collection('adminUsers').doc(userCredential.user.uid).set({
@@ -1038,6 +1090,7 @@ Leave empty to allow all countries"></textarea>
                     createdAt: new Date().toISOString(),
                     permissions: ['all']
                 });
+                console.log("Admin user added to Firestore");
                 
                 // Initialize config if not exists
                 await initializeConfig();
@@ -1051,7 +1104,17 @@ Leave empty to allow all countries"></textarea>
                 
             } catch (error) {
                 hideLoading();
-                document.getElementById('login-error').querySelector('#error-message').textContent = error.message;
+                let errorMessage = error.message;
+                
+                if (error.code === 'auth/email-already-in-use') {
+                    errorMessage = 'Email already in use. Try logging in instead.';
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = 'Invalid email format.';
+                } else if (error.code === 'auth/weak-password') {
+                    errorMessage = 'Password is too weak. Use at least 6 characters.';
+                }
+                
+                document.getElementById('login-error').querySelector('#error-message').textContent = errorMessage;
                 document.getElementById('login-error').classList.remove('hidden');
                 console.error('Error creating admin user:', error);
             }
@@ -1088,7 +1151,9 @@ Leave empty to allow all countries"></textarea>
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString()
                     });
-                    console.log("Initial config created");
+                    console.log("✅ Initial config created");
+                } else {
+                    console.log("✅ Config already exists");
                 }
             } catch (error) {
                 console.error('Error initializing config:', error);
@@ -1097,15 +1162,21 @@ Leave empty to allow all countries"></textarea>
         
         // ===== ADMIN PANEL LOADING =====
         async function loadAdminPanel() {
+            console.log("Loading admin panel...");
+            
             document.getElementById('login-modal').classList.add('hidden');
             document.getElementById('admin-panel').classList.remove('hidden');
             
             // Load admin info
-            const adminDoc = await db.collection('adminUsers').doc(currentAdmin.uid).get();
-            if (adminDoc.exists) {
-                const adminData = adminDoc.data();
-                document.getElementById('admin-name').textContent = adminData.name || currentAdmin.email;
-                document.getElementById('admin-email').textContent = currentAdmin.email;
+            try {
+                const adminDoc = await db.collection('adminUsers').doc(currentAdmin.uid).get();
+                if (adminDoc.exists) {
+                    const adminData = adminDoc.data();
+                    document.getElementById('admin-name').textContent = adminData.name || currentAdmin.email;
+                    document.getElementById('admin-email').textContent = currentAdmin.email;
+                }
+            } catch (error) {
+                console.error('Error loading admin info:', error);
             }
             
             // Initialize config if needed
@@ -1121,6 +1192,8 @@ Leave empty to allow all countries"></textarea>
             
             // Set active section
             showSection('dashboard');
+            
+            console.log("✅ Admin panel loaded successfully");
         }
         
         // ===== SECTION NAVIGATION =====

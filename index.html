@@ -44,7 +44,8 @@
             limit,
             serverTimestamp,
             writeBatch,
-            Timestamp
+            Timestamp,
+            increment
         } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
         // Initialize Firebase
@@ -89,7 +90,7 @@
                 // Check if user is in admin list
                 const adminDoc = await getDoc(doc(db, "adminUsers", user.uid));
                 
-                if (adminDoc.exists) {
+                if (adminDoc.exists()) {
                     console.log("✅ Admin access granted");
                     currentAdmin = user;
                     ADMIN_UIDS.push(user.uid);
@@ -102,7 +103,6 @@
                 }
             } catch (error) {
                 console.error('Error checking admin access:', error);
-                // Even if error, show login modal
                 showLoginModal();
                 showToast('Error checking admin access', 'error');
             }
@@ -133,13 +133,10 @@
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 console.log("✅ Login successful:", userCredential.user.email);
                 
-                // Auth state change handler will take over
-                
             } catch (error) {
                 hideLoading();
                 let errorMessage = error.message;
                 
-                // User-friendly error messages
                 if (error.code === 'auth/user-not-found') {
                     errorMessage = 'User not found. Please check your email.';
                 } else if (error.code === 'auth/wrong-password') {
@@ -231,7 +228,7 @@
                 const configRef = doc(db, "config", "main");
                 const configDoc = await getDoc(configRef);
                 
-                if (!configDoc.exists) {
+                if (!configDoc.exists()) {
                     await setDoc(configRef, {
                         minWithdrawal: 1000,
                         coinValueCoins: 1000,
@@ -263,7 +260,7 @@
             // Load admin info
             try {
                 const adminDoc = await getDoc(doc(db, "adminUsers", currentAdmin.uid));
-                if (adminDoc.exists) {
+                if (adminDoc.exists()) {
                     const adminData = adminDoc.data();
                     document.getElementById('admin-name').textContent = adminData.name || currentAdmin.email;
                     document.getElementById('admin-email').textContent = currentAdmin.email;
@@ -341,7 +338,7 @@
                 const totalUsers = usersSnapshot.size;
                 document.getElementById('total-users').textContent = totalUsers.toLocaleString();
                 
-                // Load pending withdrawals - FIXED: Check if collection exists
+                // Load pending withdrawals
                 try {
                     const withdrawalsSnapshot = await getDocs(
                         query(collection(db, "withdrawals"), where("status", "==", "pending"))
@@ -354,7 +351,7 @@
                 
                 // Load total websites
                 const configDoc = await getDoc(doc(db, "config", "main"));
-                if (configDoc.exists) {
+                if (configDoc.exists()) {
                     appConfig = configDoc.data();
                     const websites = appConfig.websitesToVisit || [];
                     document.getElementById('total-websites').textContent = websites.length;
@@ -362,12 +359,16 @@
                 
                 // Load total coins earned
                 let totalCoins = 0;
+                let totalBalance = 0;
                 usersSnapshot.forEach(doc => {
                     const userData = doc.data();
-                    totalCoins += parseInt(userData.balance || 0);
+                    totalBalance += parseInt(userData.balance || 0);
                     totalCoins += parseInt(userData.totalEarned || 0);
                 });
+                
+                // Show both balances
                 document.getElementById('total-coins').textContent = totalCoins.toLocaleString();
+                document.getElementById('total-balance').textContent = totalBalance.toLocaleString();
                 
                 // Load recent withdrawals
                 await loadRecentWithdrawals();
@@ -412,7 +413,7 @@
                     
                     tbody.innerHTML += `
                         <tr class="table-row">
-                            <td class="p-3">${data.userName || 'Unknown'}</td>
+                            <td class="p-3">${data.userName || data.firstName || 'Unknown'}</td>
                             <td class="p-3">${data.amount || 0} coins</td>
                             <td class="p-3">${statusBadge}</td>
                             <td class="p-3">${date}</td>
@@ -446,7 +447,7 @@
                     
                     tbody.innerHTML += `
                         <tr class="table-row">
-                            <td class="p-3">${data.name || 'Unknown'}</td>
+                            <td class="p-3">${data.firstName || data.name || 'Unknown'}</td>
                             <td class="p-3">${data.country ? data.country.toUpperCase() : '??'}</td>
                             <td class="p-3">${data.balance || 0} coins</td>
                             <td class="p-3">${date}</td>
@@ -467,7 +468,7 @@
             
             try {
                 const configDoc = await getDoc(doc(db, "config", "main"));
-                if (!configDoc.exists) {
+                if (!configDoc.exists()) {
                     tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-400">No configuration found</td></tr>';
                     return;
                 }
@@ -593,7 +594,7 @@
                 const configDoc = await getDoc(configRef);
                 
                 let websites = [];
-                if (configDoc.exists) {
+                if (configDoc.exists()) {
                     const config = configDoc.data();
                     websites = config.websitesToVisit || [];
                 } else {
@@ -651,7 +652,7 @@
                 const configRef = doc(db, "config", "main");
                 const configDoc = await getDoc(configRef);
                 
-                if (configDoc.exists) {
+                if (configDoc.exists()) {
                     const config = configDoc.data();
                     let websites = config.websitesToVisit || [];
                     
@@ -770,8 +771,8 @@
                             <td class="p-3 font-mono text-sm">${doc.id.substr(0, 8)}...</td>
                             <td class="p-3">
                                 <div>
-                                    <p class="font-semibold">${data.userName || 'Unknown'}</p>
-                                    <p class="text-xs text-gray-400">${data.telegramUsername || 'No Telegram'}</p>
+                                    <p class="font-semibold">${data.userName || data.firstName || 'Unknown'}</p>
+                                    <p class="text-xs text-gray-400">@${data.telegramUsername || data.username || 'No Telegram'}</p>
                                 </div>
                             </td>
                             <td class="p-3 font-bold">${data.amount || 0} coins</td>
@@ -801,7 +802,7 @@
                 
             } catch (error) {
                 console.error('Error loading withdrawals:', error);
-                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-gray-400">No withdrawals found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-gray-400">Error loading withdrawals</td></tr>';
             }
         }
 
@@ -844,9 +845,25 @@
                 allUsers = [];
                 
                 snapshot.forEach(doc => {
+                    const userData = doc.data();
                     allUsers.push({
                         id: doc.id,
-                        ...doc.data()
+                        firstName: userData.firstName || userData.name || 'Unknown',
+                        lastName: userData.lastName || '',
+                        username: userData.username || userData.telegramUsername || '',
+                        telegramId: userData.telegramId || 'N/A',
+                        photoUrl: userData.photoUrl || '',
+                        balance: userData.balance || 0,
+                        totalEarned: userData.totalEarned || 0,
+                        country: userData.country || 'unknown',
+                        visitedSitesToday: userData.visitedSitesToday || [],
+                        lastSiteVisitDate: userData.lastSiteVisitDate || 'N/A',
+                        referrals: userData.referrals || [],
+                        totalReferrals: userData.totalReferrals || 0,
+                        referralEarnings: userData.referralEarnings || 0,
+                        createdAt: userData.createdAt || null,
+                        updatedAt: userData.updatedAt || null,
+                        lastActive: userData.lastActive || null
                     });
                 });
                 
@@ -881,20 +898,20 @@
                 tbody.innerHTML += `
                     <tr class="table-row">
                         <td class="p-3 font-mono text-sm">${user.id.substr(0, 8)}...</td>
-                        <td class="p-3 font-semibold">${user.name || 'Unknown'}</td>
+                        <td class="p-3 font-semibold">${user.firstName} ${user.lastName || ''}</td>
                         <td class="p-3">
                             <div>
-                                <p class="text-sm">@${user.telegramUsername || 'No Telegram'}</p>
-                                <p class="text-xs text-gray-400">ID: ${user.telegramId || 'N/A'}</p>
+                                <p class="text-sm">@${user.username}</p>
+                                <p class="text-xs text-gray-400">ID: ${user.telegramId}</p>
                             </div>
                         </td>
                         <td class="p-3">
                             <span class="bg-gray-800/50 px-2 py-1 rounded text-sm">
-                                ${user.country ? user.country.toUpperCase() : '??'}
+                                ${user.country === 'unknown' ? '??' : user.country.toUpperCase()}
                             </span>
                         </td>
-                        <td class="p-3 font-bold text-yellow-400">${user.balance || 0}</td>
-                        <td class="p-3">${user.totalEarned || 0}</td>
+                        <td class="p-3 font-bold text-yellow-400">${user.balance}</td>
+                        <td class="p-3">${user.totalEarned}</td>
                         <td class="p-3 text-sm">${date}</td>
                         <td class="p-3">
                             <div class="flex space-x-2">
@@ -921,10 +938,10 @@
                 filteredUsers = [...allUsers];
             } else {
                 filteredUsers = allUsers.filter(user => 
-                    (user.name && user.name.toLowerCase().includes(searchTerm)) ||
-                    (user.email && user.email.toLowerCase().includes(searchTerm)) ||
-                    (user.telegramUsername && user.telegramUsername.toLowerCase().includes(searchTerm)) ||
-                    (user.country && user.country.toLowerCase().includes(searchTerm))
+                    (user.firstName && user.firstName.toLowerCase().includes(searchTerm)) ||
+                    (user.username && user.username.toLowerCase().includes(searchTerm)) ||
+                    (user.country && user.country.toLowerCase().includes(searchTerm)) ||
+                    (user.telegramId && user.telegramId.toLowerCase().includes(searchTerm))
                 );
             }
             
@@ -952,7 +969,7 @@
             
             try {
                 const userDoc = await getDoc(doc(db, "users", userId));
-                if (!userDoc.exists) {
+                if (!userDoc.exists()) {
                     showToast('User not found', 'error');
                     return;
                 }
@@ -960,21 +977,22 @@
                 const user = userDoc.data();
                 const detailsEl = document.getElementById('user-details');
                 const joinedDate = user.createdAt ? new Date(user.createdAt.seconds * 1000).toLocaleString() : 'N/A';
+                const lastActive = user.lastActive ? new Date(user.lastActive.seconds * 1000).toLocaleString() : 'N/A';
                 
                 detailsEl.innerHTML = `
                     <div class="space-y-6">
                         <div class="grid grid-cols-2 gap-4">
                             <div class="bg-gray-800/50 p-4 rounded-lg">
                                 <p class="text-sm text-gray-400">Name</p>
-                                <p class="font-semibold">${user.name || 'Unknown'}</p>
+                                <p class="font-semibold">${user.firstName || user.name || 'Unknown'} ${user.lastName || ''}</p>
                             </div>
                             <div class="bg-gray-800/50 p-4 rounded-lg">
-                                <p class="text-sm text-gray-400">Email</p>
-                                <p class="font-semibold">${user.email || 'N/A'}</p>
+                                <p class="text-sm text-gray-400">Telegram Username</p>
+                                <p class="font-semibold">@${user.username || user.telegramUsername || 'N/A'}</p>
                             </div>
                             <div class="bg-gray-800/50 p-4 rounded-lg">
-                                <p class="text-sm text-gray-400">Telegram</p>
-                                <p class="font-semibold">@${user.telegramUsername || 'N/A'}</p>
+                                <p class="text-sm text-gray-400">Telegram ID</p>
+                                <p class="font-semibold">${user.telegramId || 'N/A'}</p>
                             </div>
                             <div class="bg-gray-800/50 p-4 rounded-lg">
                                 <p class="text-sm text-gray-400">Country</p>
@@ -990,9 +1008,20 @@
                             </div>
                         </div>
                         
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400 mb-2">Joined Date</p>
+                                <p class="font-semibold">${joinedDate}</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400 mb-2">Last Active</p>
+                                <p class="font-semibold">${lastActive}</p>
+                            </div>
+                        </div>
+                        
                         <div class="bg-gray-800/50 p-4 rounded-lg">
-                            <p class="text-sm text-gray-400 mb-2">Joined Date</p>
-                            <p class="font-semibold">${joinedDate}</p>
+                            <p class="text-sm text-gray-400 mb-2">Visited Today</p>
+                            <p class="font-semibold">${(user.visitedSitesToday || []).length} websites</p>
                         </div>
                         
                         <div class="bg-gray-800/50 p-4 rounded-lg">
@@ -1027,13 +1056,14 @@
 
         async function editUserBalance(userId) {
             const userDoc = await getDoc(doc(db, "users", userId));
-            if (!userDoc.exists) {
+            if (!userDoc.exists()) {
                 showToast('User not found', 'error');
                 return;
             }
             
             const user = userDoc.data();
             const currentBalance = user.balance || 0;
+            const currentTotalEarned = user.totalEarned || 0;
             
             const newBalance = prompt(`Enter new balance (coins). Current: ${currentBalance}:`, currentBalance);
             if (newBalance === null) return;
@@ -1047,9 +1077,14 @@
             showLoading();
             
             try {
-                await updateDoc(doc(db, "users", userId), {
-                    balance: balance
-                });
+                // Calculate if we should update totalEarned too
+                let updates = { balance: balance };
+                if (balance > currentBalance) {
+                    const increase = balance - currentBalance;
+                    updates.totalEarned = (currentTotalEarned + increase);
+                }
+                
+                await updateDoc(doc(db, "users", userId), updates);
                 
                 showToast('User balance updated successfully', 'success');
                 
@@ -1074,7 +1109,7 @@
         async function loadSettings() {
             try {
                 const configDoc = await getDoc(doc(db, "config", "main"));
-                if (!configDoc.exists) {
+                if (!configDoc.exists()) {
                     // Create default config if it doesn't exist
                     await setDoc(doc(db, "config", "main"), {
                         minWithdrawal: 1000,
@@ -1169,10 +1204,11 @@
             try {
                 // Get today's date
                 const today = new Date().toISOString().split('T')[0];
-                const todayStart = new Date(today);
+                
+                // Load users
+                const usersSnapshot = await getDocs(collection(db, "users"));
                 
                 // Load new users today
-                const usersSnapshot = await getDocs(collection(db, "users"));
                 const newUsersToday = Array.from(usersSnapshot.docs).filter(doc => {
                     const userData = doc.data();
                     if (!userData.createdAt) return false;
@@ -1182,23 +1218,40 @@
                 
                 document.getElementById('new-users-today').textContent = newUsersToday;
                 
-                // Load website visits today (estimated) - This would need additional tracking
-                document.getElementById('visits-today').textContent = "0";
-                
-                // Load coins earned today (estimated)
-                let coinsToday = 0;
+                // Load website visits today
+                let visitsToday = 0;
                 usersSnapshot.forEach(doc => {
                     const userData = doc.data();
-                    // Assuming totalEarned includes today's earnings
-                    coinsToday += parseInt(userData.totalEarned || 0);
+                    const visitedSites = userData.visitedSitesToday || [];
+                    visitsToday += visitedSites.length;
                 });
+                document.getElementById('visits-today').textContent = visitsToday.toLocaleString();
                 
+                // Load coins earned today (estimate)
+                let coinsToday = 0;
+                if (appConfig && appConfig.websitesToVisit) {
+                    usersSnapshot.forEach(doc => {
+                        const userData = doc.data();
+                        const visitedSites = userData.visitedSitesToday || [];
+                        visitedSites.forEach(siteIndex => {
+                            if (appConfig.websitesToVisit[siteIndex]) {
+                                coinsToday += appConfig.websitesToVisit[siteIndex].reward || 0;
+                            }
+                        });
+                    });
+                }
                 document.getElementById('coins-today').textContent = coinsToday.toLocaleString();
                 
                 // Load withdrawals today
                 try {
-                    const withdrawalsToday = await getDocs(collection(db, "withdrawals"));
-                    document.getElementById('withdrawals-today').textContent = withdrawalsToday.size;
+                    const withdrawalsSnapshot = await getDocs(collection(db, "withdrawals"));
+                    const withdrawalsToday = Array.from(withdrawalsSnapshot.docs).filter(doc => {
+                        const data = doc.data();
+                        if (!data.requestedAt) return false;
+                        const requestDate = new Date(data.requestedAt.seconds * 1000).toISOString().split('T')[0];
+                        return requestDate === today;
+                    }).length;
+                    document.getElementById('withdrawals-today').textContent = withdrawalsToday;
                 } catch (error) {
                     document.getElementById('withdrawals-today').textContent = "0";
                 }
@@ -1353,7 +1406,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* Keep all your existing CSS styles here */
         * {
             margin: 0;
             padding: 0;
@@ -1767,7 +1819,7 @@
                             <span class="text-sm text-gray-400">Total</span>
                         </div>
                         <h3 class="text-2xl font-bold mb-1" id="total-coins">0</h3>
-                        <p class="text-gray-400">Coins Earned</p>
+                        <p class="text-gray-400">Total Coins Earned</p>
                     </div>
                 </div>
                 

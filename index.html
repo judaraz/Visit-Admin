@@ -1,0 +1,2046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visit & Earn - Admin Panel</title>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #ffffff;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            background: linear-gradient(180deg, #0f0f23 0%, #1a1a2e 100%);
+            border-right: 1px solid rgba(250, 204, 21, 0.2);
+            min-height: 100vh;
+        }
+        
+        .sidebar-link {
+            color: #a1a1aa;
+            transition: all 0.3s ease;
+            border-radius: 10px;
+        }
+        
+        .sidebar-link:hover {
+            background: rgba(250, 204, 21, 0.1);
+            color: #facc15;
+        }
+        
+        .sidebar-link.active {
+            background: linear-gradient(45deg, rgba(250, 204, 21, 0.2), rgba(250, 204, 21, 0.1));
+            color: #facc15;
+            border-left: 3px solid #facc15;
+        }
+        
+        .card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(0,0,0,0.2));
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #facc15, #eab308);
+            color: #1a1a1a;
+            font-weight: bold;
+            border: none;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(45deg, #eab308, #facc15);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(250, 204, 21, 0.4);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(45deg, #ff6b6b, #ff4757);
+            color: white;
+            font-weight: bold;
+            border: none;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-danger:hover {
+            background: linear-gradient(45deg, #ff4757, #ff6b6b);
+            transform: translateY(-2px);
+        }
+        
+        .stat-card {
+            background: linear-gradient(145deg, rgba(250, 204, 21, 0.1), rgba(0, 0, 0, 0.3));
+            border: 1px solid rgba(250, 204, 21, 0.2);
+            border-radius: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 35px rgba(250, 204, 21, 0.2);
+        }
+        
+        .gold-text {
+            background: linear-gradient(45deg, #FFD700, #FFA500, #FFD700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+        }
+        
+        .table-header {
+            background: rgba(250, 204, 21, 0.1);
+            border-bottom: 1px solid rgba(250, 204, 21, 0.2);
+        }
+        
+        .table-row:hover {
+            background: rgba(250, 204, 21, 0.05);
+        }
+        
+        input, select, textarea {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #facc15;
+            box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .badge-success {
+            background: linear-gradient(45deg, #34c759, #30d158);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        
+        .badge-warning {
+            background: linear-gradient(45deg, #ffd60a, #ffc300);
+            color: #1a1a1a;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        
+        .badge-danger {
+            background: linear-gradient(45deg, #ff3b30, #ff453a);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(10px);
+        }
+        
+        .modal-content {
+            background: linear-gradient(145deg, rgba(20, 20, 40, 0.98), rgba(10, 10, 30, 0.98));
+            border: 2px solid rgba(250, 204, 21, 0.3);
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(250, 204, 21, 0.2);
+            backdrop-filter: blur(20px);
+        }
+        
+        .loader {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(250, 204, 21, 0.1);
+            border-radius: 50%;
+            border-top-color: #facc15;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: linear-gradient(45deg, #34c759, #30d158);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            transform: translateX(150%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+        }
+        
+        .toast.error {
+            background: linear-gradient(45deg, #ff3b30, #ff453a);
+        }
+        
+        .toast.warning {
+            background: linear-gradient(45deg, #ffd60a, #ffc300);
+            color: #1a1a1a;
+        }
+    </style>
+</head>
+<body>
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <div class="flex items-center">
+            <i class="fas fa-check-circle mr-2"></i>
+            <span id="toast-message">Operation successful!</span>
+        </div>
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="hidden fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+        <div class="loader"></div>
+    </div>
+    
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal-overlay fixed inset-0 flex items-center justify-center z-40 p-5">
+        <div class="modal-content w-full max-w-md p-8">
+            <div class="text-center mb-8">
+                <div class="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center mb-4">
+                    <i class="fas fa-lock text-2xl text-black"></i>
+                </div>
+                <h2 class="text-3xl font-bold gold-text mb-2">Admin Login</h2>
+                <p class="text-gray-400">Enter your credentials to access the admin panel</p>
+            </div>
+            
+            <div id="login-error" class="hidden bg-red-900/30 border border-red-500/50 rounded-lg p-4 mb-6 text-red-300">
+                <i class="fas fa-exclamation-circle mr-2"></i>
+                <span id="error-message">Invalid credentials</span>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                    <input type="email" id="login-email" placeholder="admin@example.com" 
+                           class="w-full p-3 rounded-lg">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" 
+                           class="w-full p-3 rounded-lg">
+                </div>
+                
+                <button onclick="login()" class="w-full btn-primary p-3 rounded-lg font-bold">
+                    <i class="fas fa-sign-in-alt mr-2"></i>Login
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Admin Panel -->
+    <div id="admin-panel" class="hidden">
+        <!-- Sidebar -->
+        <div class="sidebar w-64 fixed left-0 top-0 bottom-0 z-30">
+            <div class="p-6">
+                <div class="flex items-center space-x-3 mb-8">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center">
+                        <i class="fas fa-crown text-lg text-black"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold gold-text">Visit & Earn</h2>
+                        <p class="text-xs text-gray-400">Admin Panel</p>
+                    </div>
+                </div>
+                
+                <div class="space-y-2">
+                    <a href="#" onclick="showSection('dashboard')" class="sidebar-link flex items-center space-x-3 p-3">
+                        <i class="fas fa-tachometer-alt w-5"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    
+                    <a href="#" onclick="showSection('websites')" class="sidebar-link flex items-center space-x-3 p-3 active">
+                        <i class="fas fa-globe w-5"></i>
+                        <span>Websites</span>
+                    </a>
+                    
+                    <a href="#" onclick="showSection('withdrawals')" class="sidebar-link flex items-center space-x-3 p-3">
+                        <i class="fas fa-wallet w-5"></i>
+                        <span>Withdrawals</span>
+                    </a>
+                    
+                    <a href="#" onclick="showSection('users')" class="sidebar-link flex items-center space-x-3 p-3">
+                        <i class="fas fa-users w-5"></i>
+                        <span>Users</span>
+                    </a>
+                    
+                    <a href="#" onclick="showSection('settings')" class="sidebar-link flex items-center space-x-3 p-3">
+                        <i class="fas fa-cog w-5"></i>
+                        <span>Settings</span>
+                    </a>
+                    
+                    <a href="#" onclick="showSection('analytics')" class="sidebar-link flex items-center space-x-3 p-3">
+                        <i class="fas fa-chart-line w-5"></i>
+                        <span>Analytics</span>
+                    </a>
+                </div>
+                
+                <div class="absolute bottom-6 left-6 right-6">
+                    <div class="p-3 bg-gray-800/50 rounded-lg mb-3">
+                        <p class="text-sm text-gray-300" id="admin-email">admin@example.com</p>
+                    </div>
+                    <button onclick="logout()" class="w-full flex items-center justify-center space-x-2 p-3 bg-red-900/30 hover:bg-red-900/50 rounded-lg text-red-300 transition-all">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="ml-64 p-6">
+            <!-- Top Bar -->
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h1 id="section-title" class="text-3xl font-bold gold-text">Dashboard</h1>
+                    <p class="text-gray-400" id="section-subtitle">Welcome to the admin panel</p>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <i class="fas fa-bell text-xl text-gray-400 cursor-pointer hover:text-yellow-400"></i>
+                        <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center">
+                            <i class="fas fa-user text-white"></i>
+                        </div>
+                        <div>
+                            <p class="font-semibold" id="admin-name">Admin User</p>
+                            <p class="text-xs text-gray-400">Super Admin</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Dashboard Section -->
+            <div id="dashboard-section" class="space-y-6">
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="stat-card p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                                <i class="fas fa-users text-white"></i>
+                            </div>
+                            <span class="text-sm text-gray-400">Today</span>
+                        </div>
+                        <h3 class="text-2xl font-bold mb-1" id="total-users">0</h3>
+                        <p class="text-gray-400">Total Users</p>
+                    </div>
+                    
+                    <div class="stat-card p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+                                <i class="fas fa-wallet text-white"></i>
+                            </div>
+                            <span class="text-sm text-gray-400">Pending</span>
+                        </div>
+                        <h3 class="text-2xl font-bold mb-1" id="pending-withdrawals">0</h3>
+                        <p class="text-gray-400">Pending Withdrawals</p>
+                    </div>
+                    
+                    <div class="stat-card p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                                <i class="fas fa-globe text-white"></i>
+                            </div>
+                            <span class="text-sm text-gray-400">Active</span>
+                        </div>
+                        <h3 class="text-2xl font-bold mb-1" id="total-websites">0</h3>
+                        <p class="text-gray-400">Websites</p>
+                    </div>
+                    
+                    <div class="stat-card p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center">
+                                <i class="fas fa-coins text-white"></i>
+                            </div>
+                            <span class="text-sm text-gray-400">Total</span>
+                        </div>
+                        <h3 class="text-2xl font-bold mb-1" id="total-coins">0</h3>
+                        <p class="text-gray-400">Coins Earned</p>
+                    </div>
+                </div>
+                
+                <!-- Recent Activity -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4 gold-text">Recent Withdrawals</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="table-header">
+                                    <tr>
+                                        <th class="text-left p-3">User</th>
+                                        <th class="text-left p-3">Amount</th>
+                                        <th class="text-left p-3">Status</th>
+                                        <th class="text-left p-3">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-withdrawals">
+                                    <!-- Will be populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4 gold-text">Recent Users</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="table-header">
+                                    <tr>
+                                        <th class="text-left p-3">Name</th>
+                                        <th class="text-left p-3">Country</th>
+                                        <th class="text-left p-3">Balance</th>
+                                        <th class="text-left p-3">Joined</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-users">
+                                    <!-- Will be populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="card p-6">
+                    <h3 class="text-xl font-bold mb-4 gold-text">Quick Actions</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <button onclick="showAddWebsiteModal()" class="btn-primary p-4 rounded-lg flex flex-col items-center justify-center">
+                            <i class="fas fa-plus text-2xl mb-2"></i>
+                            <span>Add Website</span>
+                        </button>
+                        
+                        <button onclick="resetAllVisits()" class="btn-secondary p-4 rounded-lg flex flex-col items-center justify-center">
+                            <i class="fas fa-redo text-2xl mb-2"></i>
+                            <span>Reset All Visits</span>
+                        </button>
+                        
+                        <button onclick="showSection('withdrawals')" class="bg-gradient-to-br from-green-500 to-green-600 p-4 rounded-lg flex flex-col items-center justify-center text-white font-bold">
+                            <i class="fas fa-check-circle text-2xl mb-2"></i>
+                            <span>Process Withdrawals</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Websites Section -->
+            <div id="websites-section" class="hidden space-y-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold gold-text">Manage Websites</h2>
+                        <p class="text-gray-400">Add, edit or remove websites that users can visit</p>
+                    </div>
+                    <button onclick="showAddWebsiteModal()" class="btn-primary px-6 py-3 rounded-lg">
+                        <i class="fas fa-plus mr-2"></i>Add Website
+                    </button>
+                </div>
+                
+                <div class="card p-6">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="table-header">
+                                <tr>
+                                    <th class="text-left p-3">#</th>
+                                    <th class="text-left p-3">Website Name</th>
+                                    <th class="text-left p-3">URL</th>
+                                    <th class="text-left p-3">Reward</th>
+                                    <th class="text-left p-3">Timer</th>
+                                    <th class="text-left p-3">Status</th>
+                                    <th class="text-left p-3">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="websites-table">
+                                <!-- Will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-6 p-4 bg-gray-800/50 rounded-lg">
+                        <h4 class="font-bold mb-2 text-yellow-400">Instructions:</h4>
+                        <ul class="text-sm text-gray-400 list-disc list-inside space-y-1">
+                            <li>Add websites with their exact URLs</li>
+                            <li>Set appropriate rewards (coins) for each visit</li>
+                            <li>Timer is in seconds (minimum 30 seconds)</li>
+                            <li>Users can visit each website once per reset</li>
+                            <li>Use "Reset All Visits" to allow users to visit again</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Withdrawals Section -->
+            <div id="withdrawals-section" class="hidden space-y-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold gold-text">Withdrawal Requests</h2>
+                        <p class="text-gray-400">Approve or reject user withdrawal requests</p>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="filterWithdrawals('pending')" class="btn-secondary px-4 py-2 rounded-lg">
+                            Pending
+                        </button>
+                        <button onclick="filterWithdrawals('approved')" class="btn-secondary px-4 py-2 rounded-lg">
+                            Approved
+                        </button>
+                        <button onclick="filterWithdrawals('rejected')" class="btn-secondary px-4 py-2 rounded-lg">
+                            Rejected
+                        </button>
+                        <button onclick="filterWithdrawals('all')" class="btn-primary px-4 py-2 rounded-lg">
+                            All
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card p-6">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="table-header">
+                                <tr>
+                                    <th class="text-left p-3">ID</th>
+                                    <th class="text-left p-3">User</th>
+                                    <th class="text-left p-3">Amount</th>
+                                    <th class="text-left p-3">Method</th>
+                                    <th class="text-left p-3">Details</th>
+                                    <th class="text-left p-3">Date</th>
+                                    <th class="text-left p-3">Status</th>
+                                    <th class="text-left p-3">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="withdrawals-table">
+                                <!-- Will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Users Section -->
+            <div id="users-section" class="hidden space-y-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold gold-text">User Management</h2>
+                        <p class="text-gray-400">View and manage all registered users</p>
+                    </div>
+                    <div class="flex space-x-2">
+                        <input type="text" id="user-search" placeholder="Search users..." 
+                               class="p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+                        <button onclick="searchUsers()" class="btn-primary px-4 py-3 rounded-lg">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card p-6">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="table-header">
+                                <tr>
+                                    <th class="text-left p-3">ID</th>
+                                    <th class="text-left p-3">Name</th>
+                                    <th class="text-left p-3">Telegram</th>
+                                    <th class="text-left p-3">Country</th>
+                                    <th class="text-left p-3">Balance</th>
+                                    <th class="text-left p-3">Total Earned</th>
+                                    <th class="text-left p-3">Joined</th>
+                                    <th class="text-left p-3">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table">
+                                <!-- Will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-6 flex justify-between items-center">
+                        <div class="text-gray-400" id="users-pagination-info">
+                            Showing 0 of 0 users
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="previousUsersPage()" class="btn-secondary px-4 py-2 rounded-lg">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button onclick="nextUsersPage()" class="btn-secondary px-4 py-2 rounded-lg">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Settings Section -->
+            <div id="settings-section" class="hidden space-y-6">
+                <div>
+                    <h2 class="text-2xl font-bold gold-text">Settings</h2>
+                    <p class="text-gray-400">Configure app settings and preferences</p>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- General Settings -->
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4 gold-text">General Settings</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Minimum Withdrawal</label>
+                                <input type="number" id="min-withdrawal" class="w-full p-3 rounded-lg" 
+                                       placeholder="1000">
+                                <p class="text-xs text-gray-400 mt-1">Minimum coins required for withdrawal</p>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Coin Value (Coins)</label>
+                                <input type="number" id="coin-value-coins" class="w-full p-3 rounded-lg" 
+                                       placeholder="1000">
+                                <p class="text-xs text-gray-400 mt-1">Number of coins for conversion</p>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Coin Value (INR)</label>
+                                <input type="number" id="coin-value-inr" class="w-full p-3 rounded-lg" 
+                                       placeholder="10">
+                                <p class="text-xs text-gray-400 mt-1">Value in INR for the above coins</p>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">IPinfo API Token</label>
+                                <input type="text" id="ipinfo-token" class="w-full p-3 rounded-lg" 
+                                       placeholder="Enter IPinfo.io token">
+                                <p class="text-xs text-gray-400 mt-1">For country detection (optional)</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Country Restrictions -->
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4 gold-text">Country Restrictions</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Allowed Countries</label>
+                                <textarea id="allowed-countries" class="w-full p-3 rounded-lg h-32" 
+                                          placeholder="Enter country codes (comma separated)
+Example: us,gb,in,bd
+Leave empty to allow all countries"></textarea>
+                                <p class="text-xs text-gray-400 mt-1">ISO 2-letter country codes (e.g., us, gb, in, bd)</p>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Blocked Country Message</label>
+                                <textarea id="blocked-message" class="w-full p-3 rounded-lg" 
+                                          placeholder="Sorry, this app is not available in your country."></textarea>
+                            </div>
+                            
+                            <div class="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4">
+                                <div class="flex items-start">
+                                    <i class="fas fa-exclamation-triangle text-yellow-400 mt-1 mr-3"></i>
+                                    <div>
+                                        <p class="text-yellow-300 font-semibold mb-1">Important Note</p>
+                                        <p class="text-yellow-200/80 text-sm">Country restrictions only work when IPinfo API token is provided. Without it, browser language detection is used which is less accurate.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Payment Methods -->
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4 gold-text">Payment Methods</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-mobile-alt text-green-400 mr-3"></i>
+                                    <span>bKash</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="bkash-enabled" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer 
+                                                peer-checked:after:translate-x-full peer-checked:after:border-white 
+                                                after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
+                                                after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all 
+                                                peer-checked:bg-green-600"></div>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-money-bill-wave text-blue-400 mr-3"></i>
+                                    <span>Nagad</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="nagad-enabled" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer 
+                                                peer-checked:after:translate-x-full peer-checked:after:border-white 
+                                                after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
+                                                after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all 
+                                                peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-university text-purple-400 mr-3"></i>
+                                    <span>UPI</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="upi-enabled" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer 
+                                                peer-checked:after:translate-x-full peer-checked:after:border-white 
+                                                after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
+                                                after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all 
+                                                peer-checked:bg-purple-600"></div>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-rupee-sign text-yellow-400 mr-3"></i>
+                                    <span>Paytm</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="paytm-enabled" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer 
+                                                peer-checked:after:translate-x-full peer-checked:after:border-white 
+                                                after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
+                                                after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all 
+                                                peer-checked:bg-yellow-600"></div>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-credit-card text-blue-300 mr-3"></i>
+                                    <span>PayPal</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="paypal-enabled" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer 
+                                                peer-checked:after:translate-x-full peer-checked:after:border-white 
+                                                after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
+                                                after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all 
+                                                peer-checked:bg-blue-400"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Save Settings -->
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4 gold-text">Save Settings</h3>
+                        <p class="text-gray-400 mb-6">Click the button below to save all your changes</p>
+                        <button onclick="saveSettings()" class="w-full btn-primary p-4 rounded-lg font-bold">
+                            <i class="fas fa-save mr-2"></i>Save All Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Analytics Section -->
+            <div id="analytics-section" class="hidden space-y-6">
+                <div>
+                    <h2 class="text-2xl font-bold gold-text">Analytics</h2>
+                    <p class="text-gray-400">View app statistics and user activity</p>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Daily Stats -->
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4 gold-text">Daily Statistics</h3>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
+                                <span>New Users Today</span>
+                                <span class="font-bold text-green-400" id="new-users-today">0</span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
+                                <span>Website Visits Today</span>
+                                <span class="font-bold text-blue-400" id="visits-today">0</span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
+                                <span>Coins Earned Today</span>
+                                <span class="font-bold text-yellow-400" id="coins-today">0</span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
+                                <span>Withdrawals Today</span>
+                                <span class="font-bold text-purple-400" id="withdrawals-today">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Top Countries -->
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4 gold-text">Top Countries</h3>
+                        <div id="top-countries">
+                            <!-- Will be populated dynamically -->
+                        </div>
+                    </div>
+                    
+                    <!-- Recent Activity Chart -->
+                    <div class="card p-6 col-span-1 lg:col-span-2">
+                        <h3 class="text-xl font-bold mb-4 gold-text">User Activity (Last 7 Days)</h3>
+                        <div class="h-64 flex items-end space-x-2" id="activity-chart">
+                            <!-- Will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add/Edit Website Modal -->
+    <div id="website-modal" class="modal-overlay fixed inset-0 hidden items-center justify-center z-40 p-5">
+        <div class="modal-content w-full max-w-md p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold gold-text" id="website-modal-title">Add Website</h3>
+                <button onclick="closeWebsiteModal()" class="text-gray-400 hover:text-white text-xl">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Website Name</label>
+                    <input type="text" id="website-name" placeholder="Google" 
+                           class="w-full p-3 rounded-lg">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Website URL</label>
+                    <input type="url" id="website-url" placeholder="https://www.google.com" 
+                           class="w-full p-3 rounded-lg">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Reward (Coins)</label>
+                        <input type="number" id="website-reward" placeholder="10" 
+                               class="w-full p-3 rounded-lg">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Timer (Seconds)</label>
+                        <input type="number" id="website-timer" placeholder="30" 
+                               class="w-full p-3 rounded-lg" min="30">
+                    </div>
+                </div>
+                
+                <div class="flex space-x-3 pt-4">
+                    <button onclick="closeWebsiteModal()" class="flex-1 btn-secondary p-3 rounded-lg">
+                        Cancel
+                    </button>
+                    <button onclick="saveWebsite()" class="flex-1 btn-primary p-3 rounded-lg font-bold" id="save-website-btn">
+                        <i class="fas fa-save mr-2"></i>Save Website
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- User Details Modal -->
+    <div id="user-modal" class="modal-overlay fixed inset-0 hidden items-center justify-center z-40 p-5">
+        <div class="modal-content w-full max-w-lg p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold gold-text">User Details</h3>
+                <button onclick="closeUserModal()" class="text-gray-400 hover:text-white text-xl">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div id="user-details">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Configuration (Same as mini app)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBEvTvWy-hH1HHgjoOhUKkj-Dglm11Oc8U",
+            authDomain: "cash-rewards-01-624ae.firebaseapp.com",
+            projectId: "cash-rewards-01-624ae",
+            storageBucket: "cash-rewards-01-624ae.firebasestorage.app",
+            messagingSenderId: "29119912449",
+            appId: "1:29119912449:web:e0c68c1994ff0a71603e00"
+        };
+        
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        let currentAdmin = null;
+        let currentWebsiteEditId = null;
+        let usersPage = 1;
+        const usersPerPage = 10;
+        let allUsers = [];
+        let filteredUsers = [];
+        
+        // Initialize
+        window.onload = async () => {
+            console.log("🚀 Admin Panel Loading...");
+            setupEventListeners();
+            
+            // Check if already logged in
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    currentAdmin = user;
+                    await loadAdminPanel();
+                } else {
+                    showLoginModal();
+                }
+            });
+        };
+        
+        // ===== AUTHENTICATION =====
+        function showLoginModal() {
+            document.getElementById('login-modal').classList.remove('hidden');
+            document.getElementById('admin-panel').classList.add('hidden');
+        }
+        
+        async function login() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errorEl = document.getElementById('login-error');
+            
+            if (!email || !password) {
+                errorEl.querySelector('#error-message').textContent = 'Please enter email and password';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                currentAdmin = userCredential.user;
+                
+                // Check if user is admin (you can add more admin validation here)
+                const userDoc = await db.collection('adminUsers').doc(currentAdmin.uid).get();
+                
+                if (!userDoc.exists) {
+                    // Create admin user if doesn't exist
+                    await db.collection('adminUsers').doc(currentAdmin.uid).set({
+                        email: currentAdmin.email,
+                        name: currentAdmin.email.split('@')[0],
+                        role: 'admin',
+                        createdAt: new Date().toISOString(),
+                        lastLogin: new Date().toISOString()
+                    });
+                } else {
+                    // Update last login
+                    await db.collection('adminUsers').doc(currentAdmin.uid).update({
+                        lastLogin: new Date().toISOString()
+                    });
+                }
+                
+                hideLoading();
+                await loadAdminPanel();
+                
+            } catch (error) {
+                hideLoading();
+                errorEl.querySelector('#error-message').textContent = error.message;
+                errorEl.classList.remove('hidden');
+                console.error('Login error:', error);
+            }
+        }
+        
+        async function logout() {
+            try {
+                await auth.signOut();
+                currentAdmin = null;
+                showLoginModal();
+                showToast('Logged out successfully', 'success');
+            } catch (error) {
+                console.error('Logout error:', error);
+                showToast('Error logging out', 'error');
+            }
+        }
+        
+        // ===== ADMIN PANEL LOADING =====
+        async function loadAdminPanel() {
+            document.getElementById('login-modal').classList.add('hidden');
+            document.getElementById('admin-panel').classList.remove('hidden');
+            
+            // Load admin info
+            const adminDoc = await db.collection('adminUsers').doc(currentAdmin.uid).get();
+            if (adminDoc.exists) {
+                const adminData = adminDoc.data();
+                document.getElementById('admin-name').textContent = adminData.name || currentAdmin.email;
+                document.getElementById('admin-email').textContent = currentAdmin.email;
+            }
+            
+            // Load initial data
+            await loadDashboardData();
+            await loadWebsites();
+            await loadWithdrawals('pending');
+            await loadUsers();
+            await loadSettings();
+            await loadAnalytics();
+            
+            // Set active section
+            showSection('dashboard');
+        }
+        
+        // ===== SECTION NAVIGATION =====
+        function showSection(section) {
+            // Hide all sections
+            document.querySelectorAll('[id$="-section"]').forEach(el => {
+                el.classList.add('hidden');
+            });
+            
+            // Remove active class from all sidebar links
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Show selected section
+            document.getElementById(`${section}-section`).classList.remove('hidden');
+            
+            // Set active sidebar link
+            const link = document.querySelector(`[onclick="showSection('${section}')"]`);
+            if (link) link.classList.add('active');
+            
+            // Update title
+            const titles = {
+                'dashboard': 'Dashboard',
+                'websites': 'Manage Websites',
+                'withdrawals': 'Withdrawal Requests',
+                'users': 'User Management',
+                'settings': 'Settings',
+                'analytics': 'Analytics'
+            };
+            
+            const subtitles = {
+                'dashboard': 'Overview of your app',
+                'websites': 'Add, edit or remove websites',
+                'withdrawals': 'Approve or reject withdrawal requests',
+                'users': 'View and manage all users',
+                'settings': 'Configure app settings',
+                'analytics': 'View app statistics and analytics'
+            };
+            
+            document.getElementById('section-title').textContent = titles[section];
+            document.getElementById('section-subtitle').textContent = subtitles[section];
+        }
+        
+        // ===== DASHBOARD =====
+        async function loadDashboardData() {
+            showLoading();
+            
+            try {
+                // Load total users
+                const usersSnapshot = await db.collection('users').get();
+                const totalUsers = usersSnapshot.size;
+                document.getElementById('total-users').textContent = totalUsers.toLocaleString();
+                
+                // Load pending withdrawals
+                const withdrawalsSnapshot = await db.collection('withdrawals')
+                    .where('status', '==', 'pending')
+                    .get();
+                document.getElementById('pending-withdrawals').textContent = withdrawalsSnapshot.size.toLocaleString();
+                
+                // Load total websites
+                const configDoc = await db.collection('config').doc('main').get();
+                if (configDoc.exists) {
+                    const config = configDoc.data();
+                    const websites = config.websitesToVisit || [];
+                    document.getElementById('total-websites').textContent = websites.length;
+                }
+                
+                // Load total coins earned
+                let totalCoins = 0;
+                usersSnapshot.forEach(doc => {
+                    const userData = doc.data();
+                    totalCoins += userData.totalEarned || 0;
+                });
+                document.getElementById('total-coins').textContent = totalCoins.toLocaleString();
+                
+                // Load recent withdrawals
+                await loadRecentWithdrawals();
+                
+                // Load recent users
+                await loadRecentUsers();
+                
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                showToast('Error loading dashboard data', 'error');
+            }
+            
+            hideLoading();
+        }
+        
+        async function loadRecentWithdrawals() {
+            const tbody = document.getElementById('recent-withdrawals');
+            tbody.innerHTML = '';
+            
+            try {
+                const snapshot = await db.collection('withdrawals')
+                    .orderBy('requestedAt', 'desc')
+                    .limit(5)
+                    .get();
+                
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const date = new Date(data.requestedAt).toLocaleDateString();
+                    
+                    let statusBadge = '';
+                    if (data.status === 'approved') {
+                        statusBadge = '<span class="badge-success">Approved</span>';
+                    } else if (data.status === 'rejected') {
+                        statusBadge = '<span class="badge-danger">Rejected</span>';
+                    } else {
+                        statusBadge = '<span class="badge-warning">Pending</span>';
+                    }
+                    
+                    tbody.innerHTML += `
+                        <tr class="table-row">
+                            <td class="p-3">${data.userName || 'Unknown'}</td>
+                            <td class="p-3">${data.amount} coins</td>
+                            <td class="p-3">${statusBadge}</td>
+                            <td class="p-3">${date}</td>
+                        </tr>
+                    `;
+                });
+                
+            } catch (error) {
+                console.error('Error loading recent withdrawals:', error);
+            }
+        }
+        
+        async function loadRecentUsers() {
+            const tbody = document.getElementById('recent-users');
+            tbody.innerHTML = '';
+            
+            try {
+                const snapshot = await db.collection('users')
+                    .orderBy('createdAt', 'desc')
+                    .limit(5)
+                    .get();
+                
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const date = new Date(data.createdAt).toLocaleDateString();
+                    
+                    tbody.innerHTML += `
+                        <tr class="table-row">
+                            <td class="p-3">${data.name || 'Unknown'}</td>
+                            <td class="p-3">${data.country ? data.country.toUpperCase() : '??'}</td>
+                            <td class="p-3">${data.balance || 0} coins</td>
+                            <td class="p-3">${date}</td>
+                        </tr>
+                    `;
+                });
+                
+            } catch (error) {
+                console.error('Error loading recent users:', error);
+            }
+        }
+        
+        // ===== WEBSITES MANAGEMENT =====
+        async function loadWebsites() {
+            const tbody = document.getElementById('websites-table');
+            tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center">Loading...</td></tr>';
+            
+            try {
+                const configDoc = await db.collection('config').doc('main').get();
+                if (!configDoc.exists) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center">No configuration found</td></tr>';
+                    return;
+                }
+                
+                const config = configDoc.data();
+                const websites = config.websitesToVisit || [];
+                
+                if (websites.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center">No websites added yet</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = '';
+                websites.forEach((website, index) => {
+                    tbody.innerHTML += `
+                        <tr class="table-row">
+                            <td class="p-3">${index + 1}</td>
+                            <td class="p-3 font-semibold">${website.name}</td>
+                            <td class="p-3">
+                                <a href="${website.link}" target="_blank" class="text-blue-400 hover:underline truncate max-w-xs block">
+                                    ${website.link}
+                                </a>
+                            </td>
+                            <td class="p-3">
+                                <span class="bg-yellow-900/50 text-yellow-300 px-2 py-1 rounded text-sm">
+                                    ${website.reward || 10} coins
+                                </span>
+                            </td>
+                            <td class="p-3">
+                                <span class="bg-blue-900/50 text-blue-300 px-2 py-1 rounded text-sm">
+                                    ${website.timer || 30}s
+                                </span>
+                            </td>
+                            <td class="p-3">
+                                <span class="badge-success">Active</span>
+                            </td>
+                            <td class="p-3">
+                                <div class="flex space-x-2">
+                                    <button onclick="editWebsite(${index})" class="btn-secondary px-3 py-1 rounded text-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button onclick="deleteWebsite(${index})" class="btn-danger px-3 py-1 rounded text-sm">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+            } catch (error) {
+                console.error('Error loading websites:', error);
+                tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-red-400">Error loading websites</td></tr>';
+            }
+        }
+        
+        function showAddWebsiteModal() {
+            currentWebsiteEditId = null;
+            document.getElementById('website-modal-title').textContent = 'Add Website';
+            document.getElementById('save-website-btn').innerHTML = '<i class="fas fa-save mr-2"></i>Add Website';
+            
+            // Clear form
+            document.getElementById('website-name').value = '';
+            document.getElementById('website-url').value = '';
+            document.getElementById('website-reward').value = '10';
+            document.getElementById('website-timer').value = '30';
+            
+            document.getElementById('website-modal').classList.remove('hidden');
+        }
+        
+        function editWebsite(index) {
+            currentWebsiteEditId = index;
+            document.getElementById('website-modal-title').textContent = 'Edit Website';
+            document.getElementById('save-website-btn').innerHTML = '<i class="fas fa-save mr-2"></i>Update Website';
+            
+            // Load website data
+            const websites = appConfig.websitesToVisit || [];
+            if (websites[index]) {
+                const website = websites[index];
+                document.getElementById('website-name').value = website.name || '';
+                document.getElementById('website-url').value = website.link || '';
+                document.getElementById('website-reward').value = website.reward || 10;
+                document.getElementById('website-timer').value = website.timer || 30;
+            }
+            
+            document.getElementById('website-modal').classList.remove('hidden');
+        }
+        
+        function closeWebsiteModal() {
+            document.getElementById('website-modal').classList.add('hidden');
+        }
+        
+        async function saveWebsite() {
+            const name = document.getElementById('website-name').value.trim();
+            const url = document.getElementById('website-url').value.trim();
+            const reward = parseInt(document.getElementById('website-reward').value);
+            const timer = parseInt(document.getElementById('website-timer').value);
+            
+            if (!name || !url) {
+                showToast('Please fill all required fields', 'warning');
+                return;
+            }
+            
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                showToast('Please enter a valid URL starting with http:// or https://', 'warning');
+                return;
+            }
+            
+            if (reward < 1 || isNaN(reward)) {
+                showToast('Please enter a valid reward amount', 'warning');
+                return;
+            }
+            
+            if (timer < 30 || isNaN(timer)) {
+                showToast('Timer must be at least 30 seconds', 'warning');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                const configRef = db.collection('config').doc('main');
+                const configDoc = await configRef.get();
+                
+                let websites = [];
+                if (configDoc.exists) {
+                    const config = configDoc.data();
+                    websites = config.websitesToVisit || [];
+                }
+                
+                const newWebsite = {
+                    name: name,
+                    link: url,
+                    reward: reward,
+                    timer: timer
+                };
+                
+                if (currentWebsiteEditId !== null) {
+                    // Update existing website
+                    websites[currentWebsiteEditId] = newWebsite;
+                } else {
+                    // Add new website
+                    websites.push(newWebsite);
+                }
+                
+                await configRef.set({
+                    websitesToVisit: websites,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+                
+                // Update local config
+                appConfig.websitesToVisit = websites;
+                
+                closeWebsiteModal();
+                await loadWebsites();
+                await loadDashboardData();
+                
+                showToast(currentWebsiteEditId !== null ? 'Website updated successfully' : 'Website added successfully', 'success');
+                
+            } catch (error) {
+                console.error('Error saving website:', error);
+                showToast('Error saving website', 'error');
+            }
+            
+            hideLoading();
+        }
+        
+        async function deleteWebsite(index) {
+            if (!confirm('Are you sure you want to delete this website?')) return;
+            
+            showLoading();
+            
+            try {
+                const configRef = db.collection('config').doc('main');
+                const configDoc = await configRef.get();
+                
+                if (configDoc.exists) {
+                    const config = configDoc.data();
+                    let websites = config.websitesToVisit || [];
+                    
+                    // Remove website
+                    websites.splice(index, 1);
+                    
+                    await configRef.set({
+                        websitesToVisit: websites,
+                        updatedAt: new Date().toISOString()
+                    }, { merge: true });
+                    
+                    // Update local config
+                    appConfig.websitesToVisit = websites;
+                    
+                    await loadWebsites();
+                    await loadDashboardData();
+                    
+                    showToast('Website deleted successfully', 'success');
+                }
+                
+            } catch (error) {
+                console.error('Error deleting website:', error);
+                showToast('Error deleting website', 'error');
+            }
+            
+            hideLoading();
+        }
+        
+        async function resetAllVisits() {
+            if (!confirm('This will reset ALL website visits for ALL users. Users will be able to visit websites again to earn coins. Continue?')) {
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                // Update the reset date in config
+                const today = new Date().toISOString().split('T')[0];
+                await db.collection('config').doc('main').set({
+                    lastWebsiteResetDate: today,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+                
+                // Clear visited sites for all users
+                const usersSnapshot = await db.collection('users').get();
+                const batch = db.batch();
+                
+                usersSnapshot.forEach(doc => {
+                    const userRef = db.collection('users').doc(doc.id);
+                    batch.update(userRef, {
+                        visitedSitesToday: [],
+                        lastSiteVisitDate: today
+                    });
+                });
+                
+                await batch.commit();
+                
+                showToast('All website visits have been reset successfully!', 'success');
+                
+            } catch (error) {
+                console.error('Error resetting visits:', error);
+                showToast('Error resetting visits', 'error');
+            }
+            
+            hideLoading();
+        }
+        
+        // ===== WITHDRAWALS MANAGEMENT =====
+        async function loadWithdrawals(filter = 'pending') {
+            const tbody = document.getElementById('withdrawals-table');
+            tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center">Loading...</td></tr>';
+            
+            try {
+                let query = db.collection('withdrawals').orderBy('requestedAt', 'desc');
+                
+                if (filter !== 'all') {
+                    query = query.where('status', '==', filter);
+                }
+                
+                const snapshot = await query.get();
+                
+                if (snapshot.empty) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="p-3 text-center">No ${filter} withdrawals found</td></tr>`;
+                    return;
+                }
+                
+                tbody.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const date = new Date(data.requestedAt).toLocaleDateString();
+                    
+                    let statusBadge = '';
+                    if (data.status === 'approved') {
+                        statusBadge = '<span class="badge-success">Approved</span>';
+                    } else if (data.status === 'rejected') {
+                        statusBadge = '<span class="badge-danger">Rejected</span>';
+                    } else {
+                        statusBadge = '<span class="badge-warning">Pending</span>';
+                    }
+                    
+                    const methodNames = {
+                        'bkash': 'bKash',
+                        'nagad': 'Nagad',
+                        'upi': 'UPI',
+                        'paytm': 'Paytm',
+                        'paypal': 'PayPal'
+                    };
+                    
+                    tbody.innerHTML += `
+                        <tr class="table-row">
+                            <td class="p-3 font-mono text-sm">${doc.id.substr(0, 8)}...</td>
+                            <td class="p-3">
+                                <div>
+                                    <p class="font-semibold">${data.userName || 'Unknown'}</p>
+                                    <p class="text-xs text-gray-400">${data.telegramUsername || 'No Telegram'}</p>
+                                </div>
+                            </td>
+                            <td class="p-3 font-bold">${data.amount} coins</td>
+                            <td class="p-3">${methodNames[data.method] || data.method}</td>
+                            <td class="p-3">
+                                <span class="bg-gray-800/50 px-2 py-1 rounded text-sm truncate max-w-xs block">
+                                    ${data.paymentDetail}
+                                </span>
+                            </td>
+                            <td class="p-3 text-sm">${date}</td>
+                            <td class="p-3">${statusBadge}</td>
+                            <td class="p-3">
+                                <div class="flex space-x-2">
+                                    ${data.status === 'pending' ? `
+                                        <button onclick="updateWithdrawal('${doc.id}', 'approved')" class="btn-success px-3 py-1 rounded text-sm">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button onclick="updateWithdrawal('${doc.id}', 'rejected')" class="btn-danger px-3 py-1 rounded text-sm">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+            } catch (error) {
+                console.error('Error loading withdrawals:', error);
+                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-red-400">Error loading withdrawals</td></tr>';
+            }
+        }
+        
+        function filterWithdrawals(status) {
+            loadWithdrawals(status);
+        }
+        
+        async function updateWithdrawal(id, status) {
+            const action = status === 'approved' ? 'approve' : 'reject';
+            if (!confirm(`Are you sure you want to ${action} this withdrawal?`)) return;
+            
+            showLoading();
+            
+            try {
+                await db.collection('withdrawals').doc(id).update({
+                    status: status,
+                    processedAt: new Date().toISOString(),
+                    processedBy: currentAdmin.email
+                });
+                
+                await loadWithdrawals('pending');
+                await loadDashboardData();
+                
+                showToast(`Withdrawal ${status} successfully`, 'success');
+                
+            } catch (error) {
+                console.error('Error updating withdrawal:', error);
+                showToast('Error updating withdrawal', 'error');
+            }
+            
+            hideLoading();
+        }
+        
+        // ===== USER MANAGEMENT =====
+        async function loadUsers() {
+            showLoading();
+            
+            try {
+                const snapshot = await db.collection('users').orderBy('createdAt', 'desc').get();
+                allUsers = [];
+                
+                snapshot.forEach(doc => {
+                    allUsers.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                filteredUsers = [...allUsers];
+                usersPage = 1;
+                renderUsersPage();
+                
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showToast('Error loading users', 'error');
+            }
+            
+            hideLoading();
+        }
+        
+        function renderUsersPage() {
+            const tbody = document.getElementById('users-table');
+            const startIndex = (usersPage - 1) * usersPerPage;
+            const endIndex = startIndex + usersPerPage;
+            const pageUsers = filteredUsers.slice(startIndex, endIndex);
+            
+            if (filteredUsers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center">No users found</td></tr>';
+                document.getElementById('users-pagination-info').textContent = 'Showing 0 of 0 users';
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            pageUsers.forEach(user => {
+                const date = new Date(user.createdAt).toLocaleDateString();
+                
+                tbody.innerHTML += `
+                    <tr class="table-row">
+                        <td class="p-3 font-mono text-sm">${user.id.substr(0, 8)}...</td>
+                        <td class="p-3 font-semibold">${user.name || 'Unknown'}</td>
+                        <td class="p-3">
+                            <div>
+                                <p class="text-sm">@${user.telegramUsername || 'No Telegram'}</p>
+                                <p class="text-xs text-gray-400">ID: ${user.telegramId || 'N/A'}</p>
+                            </div>
+                        </td>
+                        <td class="p-3">
+                            <span class="bg-gray-800/50 px-2 py-1 rounded text-sm">
+                                ${user.country ? user.country.toUpperCase() : '??'}
+                            </span>
+                        </td>
+                        <td class="p-3 font-bold text-yellow-400">${user.balance || 0}</td>
+                        <td class="p-3">${user.totalEarned || 0}</td>
+                        <td class="p-3 text-sm">${date}</td>
+                        <td class="p-3">
+                            <div class="flex space-x-2">
+                                <button onclick="viewUserDetails('${user.id}')" class="btn-secondary px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button onclick="editUserBalance('${user.id}')" class="btn-primary px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            document.getElementById('users-pagination-info').textContent = 
+                `Showing ${startIndex + 1}-${Math.min(endIndex, filteredUsers.length)} of ${filteredUsers.length} users`;
+        }
+        
+        function searchUsers() {
+            const searchTerm = document.getElementById('user-search').value.toLowerCase();
+            
+            if (!searchTerm) {
+                filteredUsers = [...allUsers];
+            } else {
+                filteredUsers = allUsers.filter(user => 
+                    (user.name && user.name.toLowerCase().includes(searchTerm)) ||
+                    (user.email && user.email.toLowerCase().includes(searchTerm)) ||
+                    (user.telegramUsername && user.telegramUsername.toLowerCase().includes(searchTerm)) ||
+                    (user.country && user.country.toLowerCase().includes(searchTerm))
+                );
+            }
+            
+            usersPage = 1;
+            renderUsersPage();
+        }
+        
+        function previousUsersPage() {
+            if (usersPage > 1) {
+                usersPage--;
+                renderUsersPage();
+            }
+        }
+        
+        function nextUsersPage() {
+            const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+            if (usersPage < totalPages) {
+                usersPage++;
+                renderUsersPage();
+            }
+        }
+        
+        async function viewUserDetails(userId) {
+            showLoading();
+            
+            try {
+                const userDoc = await db.collection('users').doc(userId).get();
+                if (!userDoc.exists) {
+                    showToast('User not found', 'error');
+                    return;
+                }
+                
+                const user = userDoc.data();
+                const detailsEl = document.getElementById('user-details');
+                
+                detailsEl.innerHTML = `
+                    <div class="space-y-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Name</p>
+                                <p class="font-semibold">${user.name || 'Unknown'}</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Email</p>
+                                <p class="font-semibold">${user.email || 'N/A'}</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Telegram</p>
+                                <p class="font-semibold">@${user.telegramUsername || 'N/A'}</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Country</p>
+                                <p class="font-semibold">${user.country ? user.country.toUpperCase() : '??'}</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Current Balance</p>
+                                <p class="font-semibold text-yellow-400">${user.balance || 0} coins</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Total Earned</p>
+                                <p class="font-semibold text-green-400">${user.totalEarned || 0} coins</p>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-800/50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-400 mb-2">Joined Date</p>
+                            <p class="font-semibold">${new Date(user.createdAt).toLocaleString()}</p>
+                        </div>
+                        
+                        <div class="bg-gray-800/50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-400 mb-2">User ID</p>
+                            <p class="font-mono text-sm break-all">${userId}</p>
+                        </div>
+                        
+                        <div class="flex space-x-3">
+                            <button onclick="closeUserModal()" class="flex-1 btn-secondary p-3 rounded-lg">
+                                Close
+                            </button>
+                            <button onclick="editUserBalance('${userId}')" class="flex-1 btn-primary p-3 rounded-lg">
+                                <i class="fas fa-coins mr-2"></i>Edit Balance
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('user-modal').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error loading user details:', error);
+                showToast('Error loading user details', 'error');
+            }
+            
+            hideLoading();
+        }
+        
+        function closeUserModal() {
+            document.getElementById('user-modal').classList.add('hidden');
+        }
+        
+        async function editUserBalance(userId) {
+            const newBalance = prompt('Enter new balance (coins):');
+            if (newBalance === null) return;
+            
+            const balance = parseInt(newBalance);
+            if (isNaN(balance) || balance < 0) {
+                showToast('Please enter a valid positive number', 'warning');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                await db.collection('users').doc(userId).update({
+                    balance: balance
+                });
+                
+                showToast('User balance updated successfully', 'success');
+                
+                // Reload users and dashboard
+                await loadUsers();
+                await loadDashboardData();
+                
+                // Update user modal if open
+                if (document.getElementById('user-modal').classList.contains('hidden') === false) {
+                    await viewUserDetails(userId);
+                }
+                
+            } catch (error) {
+                console.error('Error updating user balance:', error);
+                showToast('Error updating user balance', 'error');
+            }
+            
+            hideLoading();
+        }
+        
+        // ===== SETTINGS =====
+        async function loadSettings() {
+            try {
+                const configDoc = await db.collection('config').doc('main').get();
+                if (!configDoc.exists) {
+                    // Create default config
+                    const defaultConfig = {
+                        minWithdrawal: 1000,
+                        coinValueCoins: 1000,
+                        coinValueInr: 10,
+                        websitesToVisit: [],
+                        paymentMethods: ['bKash', 'Nagad', 'UPI', 'Paytm', 'PayPal'],
+                        allowedCountries: [],
+                        blockedCountryMessage: 'Sorry, this app is not available in your country.',
+                        lastWebsiteResetDate: new Date().toISOString().split('T')[0],
+                        createdAt: new Date().toISOString()
+                    };
+                    
+                    await db.collection('config').doc('main').set(defaultConfig);
+                    appConfig = defaultConfig;
+                } else {
+                    appConfig = configDoc.data();
+                }
+                
+                // Populate settings form
+                document.getElementById('min-withdrawal').value = appConfig.minWithdrawal || 1000;
+                document.getElementById('coin-value-coins').value = appConfig.coinValueCoins || 1000;
+                document.getElementById('coin-value-inr').value = appConfig.coinValueInr || 10;
+                document.getElementById('ipinfo-token').value = appConfig.ipinfoApiToken || '';
+                document.getElementById('allowed-countries').value = (appConfig.allowedCountries || []).join(', ');
+                document.getElementById('blocked-message').value = appConfig.blockedCountryMessage || 'Sorry, this app is not available in your country.';
+                
+                // Set payment methods checkboxes
+                const paymentMethods = appConfig.paymentMethods || [];
+                document.getElementById('bkash-enabled').checked = paymentMethods.includes('bKash');
+                document.getElementById('nagad-enabled').checked = paymentMethods.includes('Nagad');
+                document.getElementById('upi-enabled').checked = paymentMethods.includes('UPI');
+                document.getElementById('paytm-enabled').checked = paymentMethods.includes('Paytm');
+                document.getElementById('paypal-enabled').checked = paymentMethods.includes('PayPal');
+                
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                showToast('Error loading settings', 'error');
+            }
+        }
+        
+        async function saveSettings() {
+            showLoading();
+            
+            try {
+                // Get payment methods
+                const paymentMethods = [];
+                if (document.getElementById('bkash-enabled').checked) paymentMethods.push('bKash');
+                if (document.getElementById('nagad-enabled').checked) paymentMethods.push('Nagad');
+                if (document.getElementById('upi-enabled').checked) paymentMethods.push('UPI');
+                if (document.getElementById('paytm-enabled').checked) paymentMethods.push('Paytm');
+                if (document.getElementById('paypal-enabled').checked) paymentMethods.push('PayPal');
+                
+                // Get allowed countries
+                const allowedCountries = document.getElementById('allowed-countries').value
+                    .split(',')
+                    .map(c => c.trim())
+                    .filter(c => c.length === 2);
+                
+                // Update config
+                await db.collection('config').doc('main').set({
+                    minWithdrawal: parseInt(document.getElementById('min-withdrawal').value) || 1000,
+                    coinValueCoins: parseInt(document.getElementById('coin-value-coins').value) || 1000,
+                    coinValueInr: parseInt(document.getElementById('coin-value-inr').value) || 10,
+                    ipinfoApiToken: document.getElementById('ipinfo-token').value.trim(),
+                    allowedCountries: allowedCountries,
+                    blockedCountryMessage: document.getElementById('blocked-message').value.trim(),
+                    paymentMethods: paymentMethods,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+                
+                // Reload settings
+                await loadSettings();
+                await loadDashboardData();
+                
+                showToast('Settings saved successfully', 'success');
+                
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                showToast('Error saving settings', 'error');
+            }
+            
+            hideLoading();
+        }
+        
+        // ===== ANALYTICS =====
+        async function loadAnalytics() {
+            try {
+                // Get today's date
+                const today = new Date().toISOString().split('T')[0];
+                
+                // Load new users today
+                const usersSnapshot = await db.collection('users').get();
+                const newUsersToday = Array.from(usersSnapshot.docs).filter(doc => {
+                    const userDate = doc.data().createdAt.split('T')[0];
+                    return userDate === today;
+                }).length;
+                
+                document.getElementById('new-users-today').textContent = newUsersToday;
+                
+                // Load website visits today (estimated)
+                let visitsToday = 0;
+                usersSnapshot.forEach(doc => {
+                    const userData = doc.data();
+                    if (userData.visitedSitesToday && userData.lastSiteVisitDate === today) {
+                        visitsToday += userData.visitedSitesToday.length;
+                    }
+                });
+                
+                document.getElementById('visits-today').textContent = visitsToday;
+                
+                // Load coins earned today (estimated)
+                let coinsToday = 0;
+                const pointHistory = await db.collection('pointHistory')
+                    .where('timestamp', '>=', today)
+                    .get();
+                
+                pointHistory.forEach(doc => {
+                    const data = doc.data();
+                    if (data.points > 0) {
+                        coinsToday += data.points;
+                    }
+                });
+                
+                document.getElementById('coins-today').textContent = coinsToday;
+                
+                // Load withdrawals today
+                const withdrawalsToday = await db.collection('withdrawals')
+                    .where('requestedAt', '>=', today)
+                    .get();
+                
+                document.getElementById('withdrawals-today').textContent = withdrawalsToday.size;
+                
+                // Load top countries
+                const countryMap = {};
+                usersSnapshot.forEach(doc => {
+                    const country = doc.data().country || 'unknown';
+                    countryMap[country] = (countryMap[country] || 0) + 1;
+                });
+                
+                const topCountries = Object.entries(countryMap)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+                
+                const countriesEl = document.getElementById('top-countries');
+                countriesEl.innerHTML = '';
+                
+                topCountries.forEach(([country, count]) => {
+                    const percentage = (count / usersSnapshot.size * 100).toFixed(1);
+                    countriesEl.innerHTML += `
+                        <div class="mb-4">
+                            <div class="flex justify-between mb-1">
+                                <span>${country === 'unknown' ? 'Unknown' : country.toUpperCase()}</span>
+                                <span class="font-semibold">${count} users (${percentage}%)</span>
+                            </div>
+                            <div class="w-full bg-gray-800 rounded-full h-2">
+                                <div class="bg-gradient-to-r from-yellow-500 to-yellow-600 h-2 rounded-full" 
+                                     style="width: ${percentage}%"></div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                // Load activity chart (last 7 days)
+                const activityEl = document.getElementById('activity-chart');
+                activityEl.innerHTML = '';
+                
+                const last7Days = [];
+                for (let i = 6; i >= 0; i--) {
+                    const date = new Date();
+                    date.setDate(date.getDate() - i);
+                    last7Days.push(date.toISOString().split('T')[0]);
+                }
+                
+                // Get user registrations per day
+                const userRegistrations = last7Days.map(day => {
+                    return Array.from(usersSnapshot.docs).filter(doc => {
+                        const userDate = doc.data().createdAt.split('T')[0];
+                        return userDate === day;
+                    }).length;
+                });
+                
+                const maxRegistrations = Math.max(...userRegistrations, 1);
+                
+                last7Days.forEach((day, index) => {
+                    const height = (userRegistrations[index] / maxRegistrations * 100) + 10;
+                    const dateLabel = new Date(day).toLocaleDateString('en-US', { weekday: 'short' });
+                    
+                    activityEl.innerHTML += `
+                        <div class="flex-1 flex flex-col items-center">
+                            <div class="w-full bg-gradient-to-t from-yellow-500 to-yellow-600 rounded-t-lg" 
+                                 style="height: ${height}px" 
+                                 title="${dateLabel}: ${userRegistrations[index]} users">
+                            </div>
+                            <span class="mt-2 text-xs text-gray-400">${dateLabel}</span>
+                        </div>
+                    `;
+                });
+                
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+                showToast('Error loading analytics', 'error');
+            }
+        }
+        
+        // ===== UTILITY FUNCTIONS =====
+        function setupEventListeners() {
+            // Enter key in login form
+            document.getElementById('login-password').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') login();
+            });
+            
+            // Enter key in user search
+            document.getElementById('user-search').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') searchUsers();
+            });
+        }
+        
+        function showLoading() {
+            document.getElementById('loading-overlay').classList.remove('hidden');
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+        
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            
+            toastMessage.textContent = message;
+            toast.className = `toast ${type}`;
+            
+            // Remove existing classes
+            toast.classList.remove('success', 'error', 'warning');
+            toast.classList.add(type);
+            
+            // Show toast
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+        
+        // Add missing CSS classes
+        const style = document.createElement('style');
+        style.textContent = `
+            .btn-success {
+                background: linear-gradient(45deg, #34c759, #30d158);
+                color: white;
+                border: none;
+                transition: all 0.3s ease;
+            }
+            
+            .btn-success:hover {
+                background: linear-gradient(45deg, #30d158, #34c759);
+                transform: translateY(-2px);
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

@@ -5,16 +5,1335 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visit & Earn - Admin Panel</title>
     
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js"></script>
+    <!-- Firebase SDK v9 (ES Modules) -->
+    <script type="module">
+        // Firebase Configuration - Use YOUR credentials here
+        const firebaseConfig = {
+            apiKey: "AIzaSyBtqQvDCgqy5Tp01yajerWRSMfW6MKx-Gc",
+            authDomain: "visit-1f400.firebaseapp.com",
+            projectId: "visit-1f400",
+            storageBucket: "visit-1f400.firebasestorage.app",
+            messagingSenderId: "226827389556",
+            appId: "1:226827389556:web:b5c04719721212bc79df21"
+        };
+        
+        // Admin UIDs - Add your admin user IDs here after creating admin account
+        const ADMIN_UIDS = []; // Start empty, will be added after admin creation
+        
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+        import { 
+            getAuth, 
+            onAuthStateChanged, 
+            signInWithEmailAndPassword, 
+            signOut,
+            createUserWithEmailAndPassword 
+        } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            updateDoc, 
+            collection, 
+            getDocs, 
+            query, 
+            where, 
+            addDoc, 
+            setDoc,
+            orderBy,
+            limit,
+            serverTimestamp,
+            writeBatch
+        } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Global variables
+        let currentAdmin = null;
+        let currentWebsiteEditId = null;
+        let usersPage = 1;
+        const usersPerPage = 10;
+        let allUsers = [];
+        let filteredUsers = [];
+        let appConfig = {};
+
+        // Initialize on load
+        window.onload = () => {
+            console.log("🚀 Admin Panel Loading...");
+            setupEventListeners();
+            
+            // Check auth state
+            onAuthStateChanged(auth, handleAuthStateChange);
+        };
+
+        // ===== AUTHENTICATION HANDLERS =====
+        async function handleAuthStateChange(user) {
+            if (user) {
+                console.log("User detected:", user.email);
+                await checkAdminAccess(user);
+            } else {
+                console.log("No user logged in");
+                showLoginModal();
+            }
+        }
+
+        async function checkAdminAccess(user) {
+            showLoading();
+            try {
+                console.log("Checking admin access for:", user.uid);
+                
+                // Check if user is in admin list
+                const adminDoc = await getDoc(doc(db, "adminUsers", user.uid));
+                
+                if (adminDoc.exists) {
+                    console.log("✅ Admin access granted");
+                    currentAdmin = user;
+                    
+                    // Add to ADMIN_UIDS for reference code compatibility
+                    if (!ADMIN_UIDS.includes(user.uid)) {
+                        ADMIN_UIDS.push(user.uid);
+                    }
+                    
+                    await loadAdminPanel();
+                } else {
+                    console.log("❌ Not an admin, logging out");
+                    await signOut(auth);
+                    showLoginModal();
+                    showToast('Access denied. Admin privileges required.', 'error');
+                }
+            } catch (error) {
+                console.error('Error checking admin access:', error);
+                showLoginModal();
+                showToast('Error checking admin access', 'error');
+            }
+            hideLoading();
+        }
+
+        // ===== LOGIN FUNCTIONS =====
+        function showLoginModal() {
+            document.getElementById('login-modal').classList.remove('hidden');
+            document.getElementById('admin-panel').classList.add('hidden');
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errorEl = document.getElementById('login-error');
+            
+            if (!email || !password) {
+                errorEl.querySelector('#error-message').textContent = 'Please enter email and password';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                console.log("Attempting login for:", email);
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                console.log("✅ Login successful:", userCredential.user.email);
+                
+                // Will be handled by onAuthStateChanged
+                
+            } catch (error) {
+                hideLoading();
+                let errorMessage = error.message;
+                
+                // User-friendly error messages
+                if (error.code === 'auth/user-not-found') {
+                    errorMessage = 'User not found. Please check your email.';
+                } else if (error.code === 'auth/wrong-password') {
+                    errorMessage = 'Incorrect password. Please try again.';
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = 'Invalid email format.';
+                } else if (error.code === 'auth/too-many-requests') {
+                    errorMessage = 'Too many failed attempts. Please try again later.';
+                }
+                
+                errorEl.querySelector('#error-message').textContent = errorMessage;
+                errorEl.classList.remove('hidden');
+                console.error('Login error:', error);
+            }
+        }
+
+        async function createAdminUser() {
+            const email = prompt('Enter admin email:');
+            if (!email) return;
+            
+            const password = prompt('Enter admin password (min 6 characters):');
+            if (!password || password.length < 6) {
+                showToast('Password must be at least 6 characters', 'warning');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                console.log("Creating admin user:", email);
+                
+                // Create user in Firebase Auth
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                console.log("✅ Auth user created:", userCredential.user.uid);
+                
+                // Add to adminUsers collection
+                await setDoc(doc(db, "adminUsers", userCredential.user.uid), {
+                    email: email,
+                    name: email.split('@')[0],
+                    role: 'super_admin',
+                    createdAt: serverTimestamp(),
+                    permissions: ['all']
+                });
+                console.log("✅ Admin user added to Firestore");
+                
+                // Initialize config if not exists
+                await initializeConfig();
+                
+                hideLoading();
+                showToast('Admin user created successfully! You can now login.', 'success');
+                
+                // Pre-fill login form
+                document.getElementById('login-email').value = email;
+                document.getElementById('login-password').focus();
+                
+            } catch (error) {
+                hideLoading();
+                let errorMessage = error.message;
+                
+                if (error.code === 'auth/email-already-in-use') {
+                    errorMessage = 'Email already in use. Try logging in instead.';
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = 'Invalid email format.';
+                } else if (error.code === 'auth/weak-password') {
+                    errorMessage = 'Password is too weak. Use at least 6 characters.';
+                }
+                
+                document.getElementById('login-error').querySelector('#error-message').textContent = errorMessage;
+                document.getElementById('login-error').classList.remove('hidden');
+                console.error('Error creating admin user:', error);
+            }
+        }
+
+        async function logout() {
+            try {
+                await signOut(auth);
+                currentAdmin = null;
+                showLoginModal();
+                showToast('Logged out successfully', 'success');
+            } catch (error) {
+                console.error('Logout error:', error);
+                showToast('Error logging out', 'error');
+            }
+        }
+
+        // ===== INITIALIZE CONFIG =====
+        async function initializeConfig() {
+            try {
+                const configRef = doc(db, "config", "main");
+                const configDoc = await getDoc(configRef);
+                
+                if (!configDoc.exists) {
+                    await setDoc(configRef, {
+                        minWithdrawal: 1000,
+                        coinValueCoins: 1000,
+                        coinValueInr: 10,
+                        websitesToVisit: [],
+                        paymentMethods: ['bKash', 'Nagad', 'UPI', 'Paytm', 'PayPal'],
+                        allowedCountries: [],
+                        blockedCountryMessage: 'Sorry, this app is not available in your country.',
+                        lastWebsiteResetDate: new Date().toISOString().split('T')[0],
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    });
+                    console.log("✅ Initial config created");
+                } else {
+                    console.log("✅ Config already exists");
+                }
+            } catch (error) {
+                console.error('Error initializing config:', error);
+            }
+        }
+
+        // ===== ADMIN PANEL LOADING =====
+        async function loadAdminPanel() {
+            console.log("Loading admin panel...");
+            
+            document.getElementById('login-modal').classList.add('hidden');
+            document.getElementById('admin-panel').classList.remove('hidden');
+            
+            // Load admin info
+            try {
+                const adminDoc = await getDoc(doc(db, "adminUsers", currentAdmin.uid));
+                if (adminDoc.exists) {
+                    const adminData = adminDoc.data();
+                    document.getElementById('admin-name').textContent = adminData.name || currentAdmin.email;
+                    document.getElementById('admin-email').textContent = currentAdmin.email;
+                }
+            } catch (error) {
+                console.error('Error loading admin info:', error);
+            }
+            
+            // Initialize config if needed
+            await initializeConfig();
+            
+            // Load initial data
+            await loadDashboardData();
+            await loadWebsites();
+            await loadWithdrawals('pending');
+            await loadUsers();
+            await loadSettings();
+            await loadAnalytics();
+            
+            // Set active section
+            showSection('dashboard');
+            
+            console.log("✅ Admin panel loaded successfully");
+        }
+
+        // ===== SECTION NAVIGATION =====
+        function showSection(section) {
+            // Hide all sections
+            document.querySelectorAll('[id$="-section"]').forEach(el => {
+                el.classList.add('hidden');
+            });
+            
+            // Remove active class from all sidebar links
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Show selected section
+            document.getElementById(`${section}-section`).classList.remove('hidden');
+            
+            // Set active sidebar link
+            const link = document.querySelector(`[onclick*="${section}"]`);
+            if (link) link.classList.add('active');
+            
+            // Update title
+            const titles = {
+                'dashboard': 'Dashboard',
+                'websites': 'Manage Websites',
+                'withdrawals': 'Withdrawal Requests',
+                'users': 'User Management',
+                'settings': 'Settings',
+                'analytics': 'Analytics'
+            };
+            
+            const subtitles = {
+                'dashboard': 'Overview of your app',
+                'websites': 'Add, edit or remove websites',
+                'withdrawals': 'Approve or reject withdrawal requests',
+                'users': 'View and manage all users',
+                'settings': 'Configure app settings',
+                'analytics': 'View app statistics and analytics'
+            };
+            
+            document.getElementById('section-title').textContent = titles[section];
+            document.getElementById('section-subtitle').textContent = subtitles[section];
+        }
+
+        // ===== DASHBOARD =====
+        async function loadDashboardData() {
+            showLoading();
+            
+            try {
+                // Load total users
+                const usersSnapshot = await getDocs(collection(db, "users"));
+                const totalUsers = usersSnapshot.size;
+                document.getElementById('total-users').textContent = totalUsers.toLocaleString();
+                
+                // Load pending withdrawals
+                const withdrawalsSnapshot = await getDocs(query(
+                    collection(db, "withdrawals"),
+                    where("status", "==", "pending")
+                ));
+                document.getElementById('pending-withdrawals').textContent = withdrawalsSnapshot.size.toLocaleString();
+                
+                // Load total websites
+                const configDoc = await getDoc(doc(db, "config", "main"));
+                if (configDoc.exists) {
+                    appConfig = configDoc.data();
+                    const websites = appConfig.websitesToVisit || [];
+                    document.getElementById('total-websites').textContent = websites.length;
+                }
+                
+                // Load total coins earned
+                let totalCoins = 0;
+                usersSnapshot.forEach(doc => {
+                    const userData = doc.data();
+                    totalCoins += userData.totalEarned || 0;
+                });
+                document.getElementById('total-coins').textContent = totalCoins.toLocaleString();
+                
+                // Load recent withdrawals
+                await loadRecentWithdrawals();
+                
+                // Load recent users
+                await loadRecentUsers();
+                
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                showToast('Error loading dashboard data', 'error');
+            }
+            
+            hideLoading();
+        }
+
+        async function loadRecentWithdrawals() {
+            const tbody = document.getElementById('recent-withdrawals');
+            tbody.innerHTML = '';
+            
+            try {
+                const snapshot = await getDocs(query(
+                    collection(db, "withdrawals"),
+                    orderBy("requestedAt", "desc"),
+                    limit(5)
+                ));
+                
+                if (snapshot.empty) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">No withdrawals yet</td></tr>';
+                    return;
+                }
+                
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const date = new Date(data.requestedAt).toLocaleDateString();
+                    
+                    let statusBadge = '';
+                    if (data.status === 'approved') {
+                        statusBadge = '<span class="badge-success">Approved</span>';
+                    } else if (data.status === 'rejected') {
+                        statusBadge = '<span class="badge-danger">Rejected</span>';
+                    } else {
+                        statusBadge = '<span class="badge-warning">Pending</span>';
+                    }
+                    
+                    tbody.innerHTML += `
+                        <tr class="table-row">
+                            <td class="p-3">${data.userName || 'Unknown'}</td>
+                            <td class="p-3">${data.amount} coins</td>
+                            <td class="p-3">${statusBadge}</td>
+                            <td class="p-3">${date}</td>
+                        </tr>
+                    `;
+                });
+                
+            } catch (error) {
+                console.error('Error loading recent withdrawals:', error);
+                tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-red-400">Error loading</td></tr>';
+            }
+        }
+
+        async function loadRecentUsers() {
+            const tbody = document.getElementById('recent-users');
+            tbody.innerHTML = '';
+            
+            try {
+                const snapshot = await getDocs(query(
+                    collection(db, "users"),
+                    orderBy("createdAt", "desc"),
+                    limit(5)
+                ));
+                
+                if (snapshot.empty) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">No users yet</td></tr>';
+                    return;
+                }
+                
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const date = new Date(data.createdAt).toLocaleDateString();
+                    
+                    tbody.innerHTML += `
+                        <tr class="table-row">
+                            <td class="p-3">${data.name || 'Unknown'}</td>
+                            <td class="p-3">${data.country ? data.country.toUpperCase() : '??'}</td>
+                            <td class="p-3">${data.balance || 0} coins</td>
+                            <td class="p-3">${date}</td>
+                        </tr>
+                    `;
+                });
+                
+            } catch (error) {
+                console.error('Error loading recent users:', error);
+                tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-red-400">Error loading</td></tr>';
+            }
+        }
+
+        // ===== WEBSITES MANAGEMENT =====
+        async function loadWebsites() {
+            const tbody = document.getElementById('websites-table');
+            tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-400">Loading...</td></tr>';
+            
+            try {
+                const configDoc = await getDoc(doc(db, "config", "main"));
+                if (!configDoc.exists) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-400">No configuration found</td></tr>';
+                    return;
+                }
+                
+                appConfig = configDoc.data();
+                const websites = appConfig.websitesToVisit || [];
+                
+                if (websites.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-400">No websites added yet</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = '';
+                websites.forEach((website, index) => {
+                    tbody.innerHTML += `
+                        <tr class="table-row">
+                            <td class="p-3">${index + 1}</td>
+                            <td class="p-3 font-semibold">${website.name}</td>
+                            <td class="p-3">
+                                <a href="${website.link}" target="_blank" class="text-blue-400 hover:underline truncate max-w-xs block">
+                                    ${website.link}
+                                </a>
+                            </td>
+                            <td class="p-3">
+                                <span class="bg-yellow-900/50 text-yellow-300 px-2 py-1 rounded text-sm">
+                                    ${website.reward || 10} coins
+                                </span>
+                            </td>
+                            <td class="p-3">
+                                <span class="bg-blue-900/50 text-blue-300 px-2 py-1 rounded text-sm">
+                                    ${website.timer || 30}s
+                                </span>
+                            </td>
+                            <td class="p-3">
+                                <span class="badge-success">Active</span>
+                            </td>
+                            <td class="p-3">
+                                <div class="flex space-x-2">
+                                    <button onclick="editWebsite(${index})" class="btn-secondary px-3 py-1 rounded text-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button onclick="deleteWebsite(${index})" class="btn-danger px-3 py-1 rounded text-sm">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+            } catch (error) {
+                console.error('Error loading websites:', error);
+                tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-red-400">Error loading websites</td></tr>';
+            }
+        }
+
+        function showAddWebsiteModal() {
+            currentWebsiteEditId = null;
+            document.getElementById('website-modal-title').textContent = 'Add Website';
+            document.getElementById('save-website-btn').innerHTML = '<i class="fas fa-save mr-2"></i>Add Website';
+            
+            // Clear form
+            document.getElementById('website-name').value = '';
+            document.getElementById('website-url').value = '';
+            document.getElementById('website-reward').value = '10';
+            document.getElementById('website-timer').value = '30';
+            
+            document.getElementById('website-modal').classList.remove('hidden');
+        }
+
+        function editWebsite(index) {
+            currentWebsiteEditId = index;
+            document.getElementById('website-modal-title').textContent = 'Edit Website';
+            document.getElementById('save-website-btn').innerHTML = '<i class="fas fa-save mr-2"></i>Update Website';
+            
+            // Load website data
+            const websites = appConfig.websitesToVisit || [];
+            if (websites[index]) {
+                const website = websites[index];
+                document.getElementById('website-name').value = website.name || '';
+                document.getElementById('website-url').value = website.link || '';
+                document.getElementById('website-reward').value = website.reward || 10;
+                document.getElementById('website-timer').value = website.timer || 30;
+            }
+            
+            document.getElementById('website-modal').classList.remove('hidden');
+        }
+
+        function closeWebsiteModal() {
+            document.getElementById('website-modal').classList.add('hidden');
+        }
+
+        async function saveWebsite() {
+            const name = document.getElementById('website-name').value.trim();
+            const url = document.getElementById('website-url').value.trim();
+            const reward = parseInt(document.getElementById('website-reward').value);
+            const timer = parseInt(document.getElementById('website-timer').value);
+            
+            if (!name || !url) {
+                showToast('Please fill all required fields', 'warning');
+                return;
+            }
+            
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                showToast('Please enter a valid URL starting with http:// or https://', 'warning');
+                return;
+            }
+            
+            if (reward < 1 || isNaN(reward)) {
+                showToast('Please enter a valid reward amount', 'warning');
+                return;
+            }
+            
+            if (timer < 30 || isNaN(timer)) {
+                showToast('Timer must be at least 30 seconds', 'warning');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                const configRef = doc(db, "config", "main");
+                const configDoc = await getDoc(configRef);
+                
+                let websites = [];
+                if (configDoc.exists) {
+                    const config = configDoc.data();
+                    websites = config.websitesToVisit || [];
+                }
+                
+                const newWebsite = {
+                    name: name,
+                    link: url,
+                    reward: reward,
+                    timer: timer
+                };
+                
+                if (currentWebsiteEditId !== null) {
+                    // Update existing website
+                    websites[currentWebsiteEditId] = newWebsite;
+                } else {
+                    // Add new website
+                    websites.push(newWebsite);
+                }
+                
+                await updateDoc(configRef, {
+                    websitesToVisit: websites,
+                    updatedAt: serverTimestamp()
+                });
+                
+                // Update local config
+                appConfig.websitesToVisit = websites;
+                
+                closeWebsiteModal();
+                await loadWebsites();
+                await loadDashboardData();
+                
+                showToast(currentWebsiteEditId !== null ? 'Website updated successfully' : 'Website added successfully', 'success');
+                
+            } catch (error) {
+                console.error('Error saving website:', error);
+                showToast('Error saving website', 'error');
+            }
+            
+            hideLoading();
+        }
+
+        async function deleteWebsite(index) {
+            if (!confirm('Are you sure you want to delete this website?')) return;
+            
+            showLoading();
+            
+            try {
+                const configRef = doc(db, "config", "main");
+                const configDoc = await getDoc(configRef);
+                
+                if (configDoc.exists) {
+                    const config = configDoc.data();
+                    let websites = config.websitesToVisit || [];
+                    
+                    // Remove website
+                    websites.splice(index, 1);
+                    
+                    await updateDoc(configRef, {
+                        websitesToVisit: websites,
+                        updatedAt: serverTimestamp()
+                    });
+                    
+                    // Update local config
+                    appConfig.websitesToVisit = websites;
+                    
+                    await loadWebsites();
+                    await loadDashboardData();
+                    
+                    showToast('Website deleted successfully', 'success');
+                }
+                
+            } catch (error) {
+                console.error('Error deleting website:', error);
+                showToast('Error deleting website', 'error');
+            }
+            
+            hideLoading();
+        }
+
+        async function resetAllVisits() {
+            if (!confirm('This will reset ALL website visits for ALL users. Users will be able to visit websites again to earn coins. Continue?')) {
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                // Update the reset date in config
+                const today = new Date().toISOString().split('T')[0];
+                await updateDoc(doc(db, "config", "main"), {
+                    lastWebsiteResetDate: today,
+                    updatedAt: serverTimestamp()
+                });
+                
+                // Clear visited sites for all users
+                const usersSnapshot = await getDocs(collection(db, "users"));
+                const batch = writeBatch(db);
+                
+                usersSnapshot.forEach(userDoc => {
+                    const userRef = doc(db, "users", userDoc.id);
+                    batch.update(userRef, {
+                        visitedSitesToday: [],
+                        lastSiteVisitDate: today
+                    });
+                });
+                
+                await batch.commit();
+                
+                showToast('All website visits have been reset successfully!', 'success');
+                
+            } catch (error) {
+                console.error('Error resetting visits:', error);
+                showToast('Error resetting visits', 'error');
+            }
+            
+            hideLoading();
+        }
+
+        // ===== WITHDRAWALS MANAGEMENT =====
+        async function loadWithdrawals(filter = 'pending') {
+            const tbody = document.getElementById('withdrawals-table');
+            tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-gray-400">Loading...</td></tr>';
+            
+            try {
+                let withdrawalQuery = query(collection(db, "withdrawals"), orderBy("requestedAt", "desc"));
+                
+                if (filter !== 'all') {
+                    withdrawalQuery = query(
+                        collection(db, "withdrawals"),
+                        where("status", "==", filter),
+                        orderBy("requestedAt", "desc")
+                    );
+                }
+                
+                const snapshot = await getDocs(withdrawalQuery);
+                
+                if (snapshot.empty) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="p-3 text-center text-gray-400">No ${filter} withdrawals found</td></tr>`;
+                    return;
+                }
+                
+                tbody.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const date = new Date(data.requestedAt).toLocaleDateString();
+                    
+                    let statusBadge = '';
+                    if (data.status === 'approved') {
+                        statusBadge = '<span class="badge-success">Approved</span>';
+                    } else if (data.status === 'rejected') {
+                        statusBadge = '<span class="badge-danger">Rejected</span>';
+                    } else {
+                        statusBadge = '<span class="badge-warning">Pending</span>';
+                    }
+                    
+                    const methodNames = {
+                        'bkash': 'bKash',
+                        'nagad': 'Nagad',
+                        'upi': 'UPI',
+                        'paytm': 'Paytm',
+                        'paypal': 'PayPal'
+                    };
+                    
+                    tbody.innerHTML += `
+                        <tr class="table-row">
+                            <td class="p-3 font-mono text-sm">${doc.id.substr(0, 8)}...</td>
+                            <td class="p-3">
+                                <div>
+                                    <p class="font-semibold">${data.userName || 'Unknown'}</p>
+                                    <p class="text-xs text-gray-400">${data.telegramUsername || 'No Telegram'}</p>
+                                </div>
+                            </td>
+                            <td class="p-3 font-bold">${data.amount} coins</td>
+                            <td class="p-3">${methodNames[data.method] || data.method}</td>
+                            <td class="p-3">
+                                <span class="bg-gray-800/50 px-2 py-1 rounded text-sm truncate max-w-xs block">
+                                    ${data.paymentDetail}
+                                </span>
+                            </td>
+                            <td class="p-3 text-sm">${date}</td>
+                            <td class="p-3">${statusBadge}</td>
+                            <td class="p-3">
+                                <div class="flex space-x-2">
+                                    ${data.status === 'pending' ? `
+                                        <button onclick="updateWithdrawal('${doc.id}', 'approved')" class="btn-success px-3 py-1 rounded text-sm">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button onclick="updateWithdrawal('${doc.id}', 'rejected')" class="btn-danger px-3 py-1 rounded text-sm">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+            } catch (error) {
+                console.error('Error loading withdrawals:', error);
+                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-red-400">Error loading withdrawals</td></tr>';
+            }
+        }
+
+        function filterWithdrawals(status) {
+            loadWithdrawals(status);
+        }
+
+        async function updateWithdrawal(id, status) {
+            const action = status === 'approved' ? 'approve' : 'reject';
+            if (!confirm(`Are you sure you want to ${action} this withdrawal?`)) return;
+            
+            showLoading();
+            
+            try {
+                await updateDoc(doc(db, "withdrawals", id), {
+                    status: status,
+                    processedAt: serverTimestamp(),
+                    processedBy: currentAdmin.email
+                });
+                
+                await loadWithdrawals('pending');
+                await loadDashboardData();
+                
+                showToast(`Withdrawal ${status} successfully`, 'success');
+                
+            } catch (error) {
+                console.error('Error updating withdrawal:', error);
+                showToast('Error updating withdrawal', 'error');
+            }
+            
+            hideLoading();
+        }
+
+        // ===== USER MANAGEMENT =====
+        async function loadUsers() {
+            showLoading();
+            
+            try {
+                const snapshot = await getDocs(query(
+                    collection(db, "users"),
+                    orderBy("createdAt", "desc")
+                ));
+                allUsers = [];
+                
+                snapshot.forEach(doc => {
+                    allUsers.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                filteredUsers = [...allUsers];
+                usersPage = 1;
+                renderUsersPage();
+                
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showToast('Error loading users', 'error');
+            }
+            
+            hideLoading();
+        }
+
+        function renderUsersPage() {
+            const tbody = document.getElementById('users-table');
+            const startIndex = (usersPage - 1) * usersPerPage;
+            const endIndex = startIndex + usersPerPage;
+            const pageUsers = filteredUsers.slice(startIndex, endIndex);
+            
+            if (filteredUsers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-gray-400">No users found</td></tr>';
+                document.getElementById('users-pagination-info').textContent = 'Showing 0 of 0 users';
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            pageUsers.forEach(user => {
+                const date = new Date(user.createdAt).toLocaleDateString();
+                
+                tbody.innerHTML += `
+                    <tr class="table-row">
+                        <td class="p-3 font-mono text-sm">${user.id.substr(0, 8)}...</td>
+                        <td class="p-3 font-semibold">${user.name || 'Unknown'}</td>
+                        <td class="p-3">
+                            <div>
+                                <p class="text-sm">@${user.telegramUsername || 'No Telegram'}</p>
+                                <p class="text-xs text-gray-400">ID: ${user.telegramId || 'N/A'}</p>
+                            </div>
+                        </td>
+                        <td class="p-3">
+                            <span class="bg-gray-800/50 px-2 py-1 rounded text-sm">
+                                ${user.country ? user.country.toUpperCase() : '??'}
+                            </span>
+                        </td>
+                        <td class="p-3 font-bold text-yellow-400">${user.balance || 0}</td>
+                        <td class="p-3">${user.totalEarned || 0}</td>
+                        <td class="p-3 text-sm">${date}</td>
+                        <td class="p-3">
+                            <div class="flex space-x-2">
+                                <button onclick="viewUserDetails('${user.id}')" class="btn-secondary px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button onclick="editUserBalance('${user.id}')" class="btn-primary px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            document.getElementById('users-pagination-info').textContent = 
+                `Showing ${startIndex + 1}-${Math.min(endIndex, filteredUsers.length)} of ${filteredUsers.length} users`;
+        }
+
+        function searchUsers() {
+            const searchTerm = document.getElementById('user-search').value.toLowerCase();
+            
+            if (!searchTerm) {
+                filteredUsers = [...allUsers];
+            } else {
+                filteredUsers = allUsers.filter(user => 
+                    (user.name && user.name.toLowerCase().includes(searchTerm)) ||
+                    (user.email && user.email.toLowerCase().includes(searchTerm)) ||
+                    (user.telegramUsername && user.telegramUsername.toLowerCase().includes(searchTerm)) ||
+                    (user.country && user.country.toLowerCase().includes(searchTerm))
+                );
+            }
+            
+            usersPage = 1;
+            renderUsersPage();
+        }
+
+        function previousUsersPage() {
+            if (usersPage > 1) {
+                usersPage--;
+                renderUsersPage();
+            }
+        }
+
+        function nextUsersPage() {
+            const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+            if (usersPage < totalPages) {
+                usersPage++;
+                renderUsersPage();
+            }
+        }
+
+        async function viewUserDetails(userId) {
+            showLoading();
+            
+            try {
+                const userDoc = await getDoc(doc(db, "users", userId));
+                if (!userDoc.exists) {
+                    showToast('User not found', 'error');
+                    return;
+                }
+                
+                const user = userDoc.data();
+                const detailsEl = document.getElementById('user-details');
+                
+                detailsEl.innerHTML = `
+                    <div class="space-y-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Name</p>
+                                <p class="font-semibold">${user.name || 'Unknown'}</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Email</p>
+                                <p class="font-semibold">${user.email || 'N/A'}</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Telegram</p>
+                                <p class="font-semibold">@${user.telegramUsername || 'N/A'}</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Country</p>
+                                <p class="font-semibold">${user.country ? user.country.toUpperCase() : '??'}</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Current Balance</p>
+                                <p class="font-semibold text-yellow-400">${user.balance || 0} coins</p>
+                            </div>
+                            <div class="bg-gray-800/50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-400">Total Earned</p>
+                                <p class="font-semibold text-green-400">${user.totalEarned || 0} coins</p>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-800/50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-400 mb-2">Joined Date</p>
+                            <p class="font-semibold">${new Date(user.createdAt).toLocaleString()}</p>
+                        </div>
+                        
+                        <div class="bg-gray-800/50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-400 mb-2">User ID</p>
+                            <p class="font-mono text-sm break-all">${userId}</p>
+                        </div>
+                        
+                        <div class="flex space-x-3">
+                            <button onclick="closeUserModal()" class="flex-1 btn-secondary p-3 rounded-lg">
+                                Close
+                            </button>
+                            <button onclick="editUserBalance('${userId}')" class="flex-1 btn-primary p-3 rounded-lg">
+                                <i class="fas fa-coins mr-2"></i>Edit Balance
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('user-modal').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error loading user details:', error);
+                showToast('Error loading user details', 'error');
+            }
+            
+            hideLoading();
+        }
+
+        function closeUserModal() {
+            document.getElementById('user-modal').classList.add('hidden');
+        }
+
+        async function editUserBalance(userId) {
+            const newBalance = prompt('Enter new balance (coins):');
+            if (newBalance === null) return;
+            
+            const balance = parseInt(newBalance);
+            if (isNaN(balance) || balance < 0) {
+                showToast('Please enter a valid positive number', 'warning');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                await updateDoc(doc(db, "users", userId), {
+                    balance: balance
+                });
+                
+                showToast('User balance updated successfully', 'success');
+                
+                // Reload users and dashboard
+                await loadUsers();
+                await loadDashboardData();
+                
+                // Update user modal if open
+                if (document.getElementById('user-modal').classList.contains('hidden') === false) {
+                    await viewUserDetails(userId);
+                }
+                
+            } catch (error) {
+                console.error('Error updating user balance:', error);
+                showToast('Error updating user balance', 'error');
+            }
+            
+            hideLoading();
+        }
+
+        // ===== SETTINGS =====
+        async function loadSettings() {
+            try {
+                const configDoc = await getDoc(doc(db, "config", "main"));
+                if (!configDoc.exists) {
+                    showToast('Config not found. Creating default...', 'warning');
+                    await initializeConfig();
+                    return;
+                }
+                
+                appConfig = configDoc.data();
+                
+                // Populate settings form
+                document.getElementById('min-withdrawal').value = appConfig.minWithdrawal || 1000;
+                document.getElementById('coin-value-coins').value = appConfig.coinValueCoins || 1000;
+                document.getElementById('coin-value-inr').value = appConfig.coinValueInr || 10;
+                document.getElementById('ipinfo-token').value = appConfig.ipinfoApiToken || '';
+                document.getElementById('allowed-countries').value = (appConfig.allowedCountries || []).join(', ');
+                document.getElementById('blocked-message').value = appConfig.blockedCountryMessage || 'Sorry, this app is not available in your country.';
+                
+                // Set payment methods checkboxes
+                const paymentMethods = appConfig.paymentMethods || [];
+                document.getElementById('bkash-enabled').checked = paymentMethods.includes('bKash');
+                document.getElementById('nagad-enabled').checked = paymentMethods.includes('Nagad');
+                document.getElementById('upi-enabled').checked = paymentMethods.includes('UPI');
+                document.getElementById('paytm-enabled').checked = paymentMethods.includes('Paytm');
+                document.getElementById('paypal-enabled').checked = paymentMethods.includes('PayPal');
+                
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                showToast('Error loading settings', 'error');
+            }
+        }
+
+        async function saveSettings() {
+            showLoading();
+            
+            try {
+                // Get payment methods
+                const paymentMethods = [];
+                if (document.getElementById('bkash-enabled').checked) paymentMethods.push('bKash');
+                if (document.getElementById('nagad-enabled').checked) paymentMethods.push('Nagad');
+                if (document.getElementById('upi-enabled').checked) paymentMethods.push('UPI');
+                if (document.getElementById('paytm-enabled').checked) paymentMethods.push('Paytm');
+                if (document.getElementById('paypal-enabled').checked) paymentMethods.push('PayPal');
+                
+                // Get allowed countries
+                const allowedCountries = document.getElementById('allowed-countries').value
+                    .split(',')
+                    .map(c => c.trim())
+                    .filter(c => c.length === 2);
+                
+                // Update config
+                await updateDoc(doc(db, "config", "main"), {
+                    minWithdrawal: parseInt(document.getElementById('min-withdrawal').value) || 1000,
+                    coinValueCoins: parseInt(document.getElementById('coin-value-coins').value) || 1000,
+                    coinValueInr: parseInt(document.getElementById('coin-value-inr').value) || 10,
+                    ipinfoApiToken: document.getElementById('ipinfo-token').value.trim(),
+                    allowedCountries: allowedCountries,
+                    blockedCountryMessage: document.getElementById('blocked-message').value.trim(),
+                    paymentMethods: paymentMethods,
+                    updatedAt: serverTimestamp()
+                });
+                
+                // Reload settings
+                await loadSettings();
+                await loadDashboardData();
+                
+                showToast('Settings saved successfully', 'success');
+                
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                showToast('Error saving settings', 'error');
+            }
+            
+            hideLoading();
+        }
+
+        // ===== ANALYTICS =====
+        async function loadAnalytics() {
+            try {
+                // Get today's date
+                const today = new Date().toISOString().split('T')[0];
+                
+                // Load new users today
+                const usersSnapshot = await getDocs(collection(db, "users"));
+                const newUsersToday = Array.from(usersSnapshot.docs).filter(doc => {
+                    const userDate = doc.data().createdAt?.split('T')[0];
+                    return userDate === today;
+                }).length;
+                
+                document.getElementById('new-users-today').textContent = newUsersToday;
+                
+                // Load website visits today (estimated)
+                let visitsToday = 0;
+                usersSnapshot.forEach(doc => {
+                    const userData = doc.data();
+                    if (userData.visitedSitesToday && userData.lastSiteVisitDate === today) {
+                        visitsToday += userData.visitedSitesToday.length;
+                    }
+                });
+                
+                document.getElementById('visits-today').textContent = visitsToday;
+                
+                // Load coins earned today (estimated)
+                let coinsToday = 0;
+                usersSnapshot.forEach(doc => {
+                    const userData = doc.data();
+                    if (userData.todayEarnings) {
+                        coinsToday += userData.todayEarnings;
+                    }
+                });
+                
+                document.getElementById('coins-today').textContent = coinsToday;
+                
+                // Load withdrawals today
+                const withdrawalsToday = await getDocs(query(
+                    collection(db, "withdrawals"),
+                    where("requestedAt", ">=", today)
+                ));
+                
+                document.getElementById('withdrawals-today').textContent = withdrawalsToday.size;
+                
+                // Load top countries
+                const countryMap = {};
+                usersSnapshot.forEach(doc => {
+                    const country = doc.data().country || 'unknown';
+                    countryMap[country] = (countryMap[country] || 0) + 1;
+                });
+                
+                const topCountries = Object.entries(countryMap)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+                
+                const countriesEl = document.getElementById('top-countries');
+                countriesEl.innerHTML = '';
+                
+                if (topCountries.length === 0) {
+                    countriesEl.innerHTML = '<div class="text-gray-400">No country data available</div>';
+                } else {
+                    topCountries.forEach(([country, count]) => {
+                        const percentage = (count / usersSnapshot.size * 100).toFixed(1);
+                        countriesEl.innerHTML += `
+                            <div class="mb-4">
+                                <div class="flex justify-between mb-1">
+                                    <span>${country === 'unknown' ? 'Unknown' : country.toUpperCase()}</span>
+                                    <span class="font-semibold">${count} users (${percentage}%)</span>
+                                </div>
+                                <div class="w-full bg-gray-800 rounded-full h-2">
+                                    <div class="bg-gradient-to-r from-yellow-500 to-yellow-600 h-2 rounded-full" 
+                                         style="width: ${percentage}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                
+                // Load activity chart (last 7 days)
+                const activityEl = document.getElementById('activity-chart');
+                activityEl.innerHTML = '';
+                
+                const last7Days = [];
+                for (let i = 6; i >= 0; i--) {
+                    const date = new Date();
+                    date.setDate(date.getDate() - i);
+                    last7Days.push(date.toISOString().split('T')[0]);
+                }
+                
+                // Get user registrations per day
+                const userRegistrations = last7Days.map(day => {
+                    return Array.from(usersSnapshot.docs).filter(doc => {
+                        const userDate = doc.data().createdAt?.split('T')[0];
+                        return userDate === day;
+                    }).length;
+                });
+                
+                const maxRegistrations = Math.max(...userRegistrations, 1);
+                
+                last7Days.forEach((day, index) => {
+                    const height = (userRegistrations[index] / maxRegistrations * 100) + 10;
+                    const dateLabel = new Date(day).toLocaleDateString('en-US', { weekday: 'short' });
+                    
+                    activityEl.innerHTML += `
+                        <div class="flex-1 flex flex-col items-center">
+                            <div class="w-full bg-gradient-to-t from-yellow-500 to-yellow-600 rounded-t-lg" 
+                                 style="height: ${height}px" 
+                                 title="${dateLabel}: ${userRegistrations[index]} users">
+                            </div>
+                            <span class="mt-2 text-xs text-gray-400">${dateLabel}</span>
+                        </div>
+                    `;
+                });
+                
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+                showToast('Error loading analytics', 'error');
+            }
+        }
+
+        // ===== UTILITY FUNCTIONS =====
+        function setupEventListeners() {
+            // Enter key in login form
+            document.getElementById('login-password').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleLogin();
+            });
+            
+            // Enter key in user search
+            document.getElementById('user-search').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') searchUsers();
+            });
+        }
+
+        function showLoading() {
+            document.getElementById('loading-overlay').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            
+            toastMessage.textContent = message;
+            toast.className = `toast ${type}`;
+            
+            // Remove existing classes
+            toast.classList.remove('success', 'error', 'warning');
+            toast.classList.add(type);
+            
+            // Show toast
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // ===== ADD GAME MANAGEMENT SECTION =====
+        // You can add game management features here later
+        // For now, let's keep the existing functionality
+
+        // Make functions globally available
+        window.handleLogin = handleLogin;
+        window.createAdminUser = createAdminUser;
+        window.logout = logout;
+        window.showSection = showSection;
+        window.showAddWebsiteModal = showAddWebsiteModal;
+        window.closeWebsiteModal = closeWebsiteModal;
+        window.saveWebsite = saveWebsite;
+        window.editWebsite = editWebsite;
+        window.deleteWebsite = deleteWebsite;
+        window.resetAllVisits = resetAllVisits;
+        window.filterWithdrawals = filterWithdrawals;
+        window.updateWithdrawal = updateWithdrawal;
+        window.searchUsers = searchUsers;
+        window.previousUsersPage = previousUsersPage;
+        window.nextUsersPage = nextUsersPage;
+        window.viewUserDetails = viewUserDetails;
+        window.closeUserModal = closeUserModal;
+        window.editUserBalance = editUserBalance;
+        window.saveSettings = saveSettings;
+
+        console.log("✅ All functions loaded");
+    </script>
     
+    <!-- Keep the rest of your HTML exactly as it was -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
+        /* Keep all your existing CSS styles here */
         * {
             margin: 0;
             padding: 0;
@@ -283,7 +1602,7 @@
                            class="w-full p-3 rounded-lg">
                 </div>
                 
-                <button onclick="login()" class="w-full btn-primary p-3 rounded-lg font-bold">
+                <button onclick="handleLogin()" class="w-full btn-primary p-3 rounded-lg font-bold">
                     <i class="fas fa-sign-in-alt mr-2"></i>Login
                 </button>
                 
@@ -921,1276 +2240,5 @@ Leave empty to allow all countries"></textarea>
             </div>
         </div>
     </div>
-
-    <script>
-        // Firebase Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyBtqQvDCgqy5Tp01yajerWRSMfW6MKx-Gc",
-            authDomain: "visit-1f400.firebaseapp.com",
-            projectId: "visit-1f400",
-            storageBucket: "visit-1f400.firebasestorage.app",
-            messagingSenderId: "226827389556",
-            appId: "1:226827389556:web:b5c04719721212bc79df21"
-        };
-        
-        // Initialize Firebase
-        let app, auth, db;
-        
-        // Global variables
-        let currentAdmin = null;
-        let currentWebsiteEditId = null;
-        let usersPage = 1;
-        const usersPerPage = 10;
-        let allUsers = [];
-        let filteredUsers = [];
-        let appConfig = {};
-        
-        // Initialize Firebase and app
-        function initializeFirebase() {
-            try {
-                // Check if Firebase is already initialized
-                if (!firebase.apps.length) {
-                    app = firebase.initializeApp(firebaseConfig);
-                } else {
-                    app = firebase.app();
-                }
-                
-                auth = firebase.auth();
-                db = firebase.firestore();
-                
-                console.log("✅ Firebase initialized successfully");
-                return true;
-            } catch (error) {
-                console.error("❌ Firebase initialization failed:", error);
-                showToast('Failed to initialize Firebase. Please check your configuration.', 'error');
-                return false;
-            }
-        }
-        
-        // Initialize app when page loads
-        window.onload = async () => {
-            console.log("🚀 Admin Panel Loading...");
-            
-            // Initialize Firebase first
-            if (!initializeFirebase()) {
-                document.getElementById('login-error').querySelector('#error-message').textContent = 
-                    'Firebase initialization failed. Check console for details.';
-                document.getElementById('login-error').classList.remove('hidden');
-                return;
-            }
-            
-            setupEventListeners();
-            
-            // Check if already logged in
-            auth.onAuthStateChanged(async (user) => {
-                if (user) {
-                    console.log("User detected:", user.email);
-                    await checkAdminAccess(user);
-                } else {
-                    console.log("No user logged in, showing login modal");
-                    showLoginModal();
-                }
-            });
-        };
-        
-        // ===== AUTHENTICATION =====
-        async function checkAdminAccess(user) {
-            showLoading();
-            try {
-                console.log("Checking admin access for:", user.uid);
-                const adminDoc = await db.collection('adminUsers').doc(user.uid).get();
-                
-                if (adminDoc.exists) {
-                    console.log("Admin access granted");
-                    currentAdmin = user;
-                    await loadAdminPanel();
-                } else {
-                    console.log("Not an admin, logging out");
-                    await auth.signOut();
-                    showLoginModal();
-                    showToast('Access denied. Admin privileges required.', 'error');
-                }
-            } catch (error) {
-                console.error('Error checking admin access:', error);
-                showLoginModal();
-                showToast('Error checking admin access', 'error');
-            }
-            hideLoading();
-        }
-        
-        function showLoginModal() {
-            document.getElementById('login-modal').classList.remove('hidden');
-            document.getElementById('admin-panel').classList.add('hidden');
-        }
-        
-        async function login() {
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
-            const errorEl = document.getElementById('login-error');
-            
-            if (!email || !password) {
-                errorEl.querySelector('#error-message').textContent = 'Please enter email and password';
-                errorEl.classList.remove('hidden');
-                return;
-            }
-            
-            showLoading();
-            
-            try {
-                console.log("Attempting login for:", email);
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                console.log("Login successful:", userCredential.user.email);
-                await checkAdminAccess(userCredential.user);
-                
-            } catch (error) {
-                hideLoading();
-                let errorMessage = error.message;
-                
-                // User-friendly error messages
-                if (error.code === 'auth/user-not-found') {
-                    errorMessage = 'User not found. Please check your email.';
-                } else if (error.code === 'auth/wrong-password') {
-                    errorMessage = 'Incorrect password. Please try again.';
-                } else if (error.code === 'auth/invalid-email') {
-                    errorMessage = 'Invalid email format.';
-                } else if (error.code === 'auth/too-many-requests') {
-                    errorMessage = 'Too many failed attempts. Please try again later.';
-                }
-                
-                errorEl.querySelector('#error-message').textContent = errorMessage;
-                errorEl.classList.remove('hidden');
-                console.error('Login error:', error);
-            }
-        }
-        
-        async function createAdminUser() {
-            const email = prompt('Enter admin email:');
-            if (!email) return;
-            
-            const password = prompt('Enter admin password (min 6 characters):');
-            if (!password || password.length < 6) {
-                showToast('Password must be at least 6 characters', 'warning');
-                return;
-            }
-            
-            showLoading();
-            
-            try {
-                console.log("Creating admin user:", email);
-                
-                // Create user in Firebase Auth
-                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-                console.log("Auth user created:", userCredential.user.uid);
-                
-                // Add to adminUsers collection
-                await db.collection('adminUsers').doc(userCredential.user.uid).set({
-                    email: email,
-                    name: email.split('@')[0],
-                    role: 'super_admin',
-                    createdAt: new Date().toISOString(),
-                    permissions: ['all']
-                });
-                console.log("Admin user added to Firestore");
-                
-                // Initialize config if not exists
-                await initializeConfig();
-                
-                hideLoading();
-                showToast('Admin user created successfully! You can now login.', 'success');
-                
-                // Pre-fill login form
-                document.getElementById('login-email').value = email;
-                document.getElementById('login-password').focus();
-                
-            } catch (error) {
-                hideLoading();
-                let errorMessage = error.message;
-                
-                if (error.code === 'auth/email-already-in-use') {
-                    errorMessage = 'Email already in use. Try logging in instead.';
-                } else if (error.code === 'auth/invalid-email') {
-                    errorMessage = 'Invalid email format.';
-                } else if (error.code === 'auth/weak-password') {
-                    errorMessage = 'Password is too weak. Use at least 6 characters.';
-                }
-                
-                document.getElementById('login-error').querySelector('#error-message').textContent = errorMessage;
-                document.getElementById('login-error').classList.remove('hidden');
-                console.error('Error creating admin user:', error);
-            }
-        }
-        
-        async function logout() {
-            try {
-                await auth.signOut();
-                currentAdmin = null;
-                showLoginModal();
-                showToast('Logged out successfully', 'success');
-            } catch (error) {
-                console.error('Logout error:', error);
-                showToast('Error logging out', 'error');
-            }
-        }
-        
-        // ===== INITIALIZE CONFIG =====
-        async function initializeConfig() {
-            try {
-                const configRef = db.collection('config').doc('main');
-                const configDoc = await configRef.get();
-                
-                if (!configDoc.exists) {
-                    await configRef.set({
-                        minWithdrawal: 1000,
-                        coinValueCoins: 1000,
-                        coinValueInr: 10,
-                        websitesToVisit: [],
-                        paymentMethods: ['bKash', 'Nagad', 'UPI', 'Paytm', 'PayPal'],
-                        allowedCountries: [],
-                        blockedCountryMessage: 'Sorry, this app is not available in your country.',
-                        lastWebsiteResetDate: new Date().toISOString().split('T')[0],
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
-                    });
-                    console.log("✅ Initial config created");
-                } else {
-                    console.log("✅ Config already exists");
-                }
-            } catch (error) {
-                console.error('Error initializing config:', error);
-            }
-        }
-        
-        // ===== ADMIN PANEL LOADING =====
-        async function loadAdminPanel() {
-            console.log("Loading admin panel...");
-            
-            document.getElementById('login-modal').classList.add('hidden');
-            document.getElementById('admin-panel').classList.remove('hidden');
-            
-            // Load admin info
-            try {
-                const adminDoc = await db.collection('adminUsers').doc(currentAdmin.uid).get();
-                if (adminDoc.exists) {
-                    const adminData = adminDoc.data();
-                    document.getElementById('admin-name').textContent = adminData.name || currentAdmin.email;
-                    document.getElementById('admin-email').textContent = currentAdmin.email;
-                }
-            } catch (error) {
-                console.error('Error loading admin info:', error);
-            }
-            
-            // Initialize config if needed
-            await initializeConfig();
-            
-            // Load initial data
-            await loadDashboardData();
-            await loadWebsites();
-            await loadWithdrawals('pending');
-            await loadUsers();
-            await loadSettings();
-            await loadAnalytics();
-            
-            // Set active section
-            showSection('dashboard');
-            
-            console.log("✅ Admin panel loaded successfully");
-        }
-        
-        // ===== SECTION NAVIGATION =====
-        function showSection(section) {
-            // Hide all sections
-            document.querySelectorAll('[id$="-section"]').forEach(el => {
-                el.classList.add('hidden');
-            });
-            
-            // Remove active class from all sidebar links
-            document.querySelectorAll('.sidebar-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            
-            // Show selected section
-            document.getElementById(`${section}-section`).classList.remove('hidden');
-            
-            // Set active sidebar link
-            const link = document.querySelector(`[onclick="showSection('${section}')"]`);
-            if (link) link.classList.add('active');
-            
-            // Update title
-            const titles = {
-                'dashboard': 'Dashboard',
-                'websites': 'Manage Websites',
-                'withdrawals': 'Withdrawal Requests',
-                'users': 'User Management',
-                'settings': 'Settings',
-                'analytics': 'Analytics'
-            };
-            
-            const subtitles = {
-                'dashboard': 'Overview of your app',
-                'websites': 'Add, edit or remove websites',
-                'withdrawals': 'Approve or reject withdrawal requests',
-                'users': 'View and manage all users',
-                'settings': 'Configure app settings',
-                'analytics': 'View app statistics and analytics'
-            };
-            
-            document.getElementById('section-title').textContent = titles[section];
-            document.getElementById('section-subtitle').textContent = subtitles[section];
-        }
-        
-        // ===== DASHBOARD =====
-        async function loadDashboardData() {
-            showLoading();
-            
-            try {
-                // Load total users
-                const usersSnapshot = await db.collection('users').get();
-                const totalUsers = usersSnapshot.size;
-                document.getElementById('total-users').textContent = totalUsers.toLocaleString();
-                
-                // Load pending withdrawals
-                const withdrawalsSnapshot = await db.collection('withdrawals')
-                    .where('status', '==', 'pending')
-                    .get();
-                document.getElementById('pending-withdrawals').textContent = withdrawalsSnapshot.size.toLocaleString();
-                
-                // Load total websites
-                const configDoc = await db.collection('config').doc('main').get();
-                if (configDoc.exists) {
-                    appConfig = configDoc.data();
-                    const websites = appConfig.websitesToVisit || [];
-                    document.getElementById('total-websites').textContent = websites.length;
-                }
-                
-                // Load total coins earned
-                let totalCoins = 0;
-                usersSnapshot.forEach(doc => {
-                    const userData = doc.data();
-                    totalCoins += userData.totalEarned || 0;
-                });
-                document.getElementById('total-coins').textContent = totalCoins.toLocaleString();
-                
-                // Load recent withdrawals
-                await loadRecentWithdrawals();
-                
-                // Load recent users
-                await loadRecentUsers();
-                
-            } catch (error) {
-                console.error('Error loading dashboard data:', error);
-                showToast('Error loading dashboard data', 'error');
-            }
-            
-            hideLoading();
-        }
-        
-        async function loadRecentWithdrawals() {
-            const tbody = document.getElementById('recent-withdrawals');
-            tbody.innerHTML = '';
-            
-            try {
-                const snapshot = await db.collection('withdrawals')
-                    .orderBy('requestedAt', 'desc')
-                    .limit(5)
-                    .get();
-                
-                if (snapshot.empty) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">No withdrawals yet</td></tr>';
-                    return;
-                }
-                
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    const date = new Date(data.requestedAt).toLocaleDateString();
-                    
-                    let statusBadge = '';
-                    if (data.status === 'approved') {
-                        statusBadge = '<span class="badge-success">Approved</span>';
-                    } else if (data.status === 'rejected') {
-                        statusBadge = '<span class="badge-danger">Rejected</span>';
-                    } else {
-                        statusBadge = '<span class="badge-warning">Pending</span>';
-                    }
-                    
-                    tbody.innerHTML += `
-                        <tr class="table-row">
-                            <td class="p-3">${data.userName || 'Unknown'}</td>
-                            <td class="p-3">${data.amount} coins</td>
-                            <td class="p-3">${statusBadge}</td>
-                            <td class="p-3">${date}</td>
-                        </tr>
-                    `;
-                });
-                
-            } catch (error) {
-                console.error('Error loading recent withdrawals:', error);
-                tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-red-400">Error loading</td></tr>';
-            }
-        }
-        
-        async function loadRecentUsers() {
-            const tbody = document.getElementById('recent-users');
-            tbody.innerHTML = '';
-            
-            try {
-                const snapshot = await db.collection('users')
-                    .orderBy('createdAt', 'desc')
-                    .limit(5)
-                    .get();
-                
-                if (snapshot.empty) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">No users yet</td></tr>';
-                    return;
-                }
-                
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    const date = new Date(data.createdAt).toLocaleDateString();
-                    
-                    tbody.innerHTML += `
-                        <tr class="table-row">
-                            <td class="p-3">${data.name || 'Unknown'}</td>
-                            <td class="p-3">${data.country ? data.country.toUpperCase() : '??'}</td>
-                            <td class="p-3">${data.balance || 0} coins</td>
-                            <td class="p-3">${date}</td>
-                        </tr>
-                    `;
-                });
-                
-            } catch (error) {
-                console.error('Error loading recent users:', error);
-                tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-red-400">Error loading</td></tr>';
-            }
-        }
-        
-        // ===== WEBSITES MANAGEMENT =====
-        async function loadWebsites() {
-            const tbody = document.getElementById('websites-table');
-            tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-400">Loading...</td></tr>';
-            
-            try {
-                const configDoc = await db.collection('config').doc('main').get();
-                if (!configDoc.exists) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-400">No configuration found</td></tr>';
-                    return;
-                }
-                
-                appConfig = configDoc.data();
-                const websites = appConfig.websitesToVisit || [];
-                
-                if (websites.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-400">No websites added yet</td></tr>';
-                    return;
-                }
-                
-                tbody.innerHTML = '';
-                websites.forEach((website, index) => {
-                    tbody.innerHTML += `
-                        <tr class="table-row">
-                            <td class="p-3">${index + 1}</td>
-                            <td class="p-3 font-semibold">${website.name}</td>
-                            <td class="p-3">
-                                <a href="${website.link}" target="_blank" class="text-blue-400 hover:underline truncate max-w-xs block">
-                                    ${website.link}
-                                </a>
-                            </td>
-                            <td class="p-3">
-                                <span class="bg-yellow-900/50 text-yellow-300 px-2 py-1 rounded text-sm">
-                                    ${website.reward || 10} coins
-                                </span>
-                            </td>
-                            <td class="p-3">
-                                <span class="bg-blue-900/50 text-blue-300 px-2 py-1 rounded text-sm">
-                                    ${website.timer || 30}s
-                                </span>
-                            </td>
-                            <td class="p-3">
-                                <span class="badge-success">Active</span>
-                            </td>
-                            <td class="p-3">
-                                <div class="flex space-x-2">
-                                    <button onclick="editWebsite(${index})" class="btn-secondary px-3 py-1 rounded text-sm">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button onclick="deleteWebsite(${index})" class="btn-danger px-3 py-1 rounded text-sm">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                });
-                
-            } catch (error) {
-                console.error('Error loading websites:', error);
-                tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-red-400">Error loading websites</td></tr>';
-            }
-        }
-        
-        function showAddWebsiteModal() {
-            currentWebsiteEditId = null;
-            document.getElementById('website-modal-title').textContent = 'Add Website';
-            document.getElementById('save-website-btn').innerHTML = '<i class="fas fa-save mr-2"></i>Add Website';
-            
-            // Clear form
-            document.getElementById('website-name').value = '';
-            document.getElementById('website-url').value = '';
-            document.getElementById('website-reward').value = '10';
-            document.getElementById('website-timer').value = '30';
-            
-            document.getElementById('website-modal').classList.remove('hidden');
-        }
-        
-        function editWebsite(index) {
-            currentWebsiteEditId = index;
-            document.getElementById('website-modal-title').textContent = 'Edit Website';
-            document.getElementById('save-website-btn').innerHTML = '<i class="fas fa-save mr-2"></i>Update Website';
-            
-            // Load website data
-            const websites = appConfig.websitesToVisit || [];
-            if (websites[index]) {
-                const website = websites[index];
-                document.getElementById('website-name').value = website.name || '';
-                document.getElementById('website-url').value = website.link || '';
-                document.getElementById('website-reward').value = website.reward || 10;
-                document.getElementById('website-timer').value = website.timer || 30;
-            }
-            
-            document.getElementById('website-modal').classList.remove('hidden');
-        }
-        
-        function closeWebsiteModal() {
-            document.getElementById('website-modal').classList.add('hidden');
-        }
-        
-        async function saveWebsite() {
-            const name = document.getElementById('website-name').value.trim();
-            const url = document.getElementById('website-url').value.trim();
-            const reward = parseInt(document.getElementById('website-reward').value);
-            const timer = parseInt(document.getElementById('website-timer').value);
-            
-            if (!name || !url) {
-                showToast('Please fill all required fields', 'warning');
-                return;
-            }
-            
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                showToast('Please enter a valid URL starting with http:// or https://', 'warning');
-                return;
-            }
-            
-            if (reward < 1 || isNaN(reward)) {
-                showToast('Please enter a valid reward amount', 'warning');
-                return;
-            }
-            
-            if (timer < 30 || isNaN(timer)) {
-                showToast('Timer must be at least 30 seconds', 'warning');
-                return;
-            }
-            
-            showLoading();
-            
-            try {
-                const configRef = db.collection('config').doc('main');
-                const configDoc = await configRef.get();
-                
-                let websites = [];
-                if (configDoc.exists) {
-                    const config = configDoc.data();
-                    websites = config.websitesToVisit || [];
-                }
-                
-                const newWebsite = {
-                    name: name,
-                    link: url,
-                    reward: reward,
-                    timer: timer
-                };
-                
-                if (currentWebsiteEditId !== null) {
-                    // Update existing website
-                    websites[currentWebsiteEditId] = newWebsite;
-                } else {
-                    // Add new website
-                    websites.push(newWebsite);
-                }
-                
-                await configRef.set({
-                    websitesToVisit: websites,
-                    updatedAt: new Date().toISOString()
-                }, { merge: true });
-                
-                // Update local config
-                appConfig.websitesToVisit = websites;
-                
-                closeWebsiteModal();
-                await loadWebsites();
-                await loadDashboardData();
-                
-                showToast(currentWebsiteEditId !== null ? 'Website updated successfully' : 'Website added successfully', 'success');
-                
-            } catch (error) {
-                console.error('Error saving website:', error);
-                showToast('Error saving website', 'error');
-            }
-            
-            hideLoading();
-        }
-        
-        async function deleteWebsite(index) {
-            if (!confirm('Are you sure you want to delete this website?')) return;
-            
-            showLoading();
-            
-            try {
-                const configRef = db.collection('config').doc('main');
-                const configDoc = await configRef.get();
-                
-                if (configDoc.exists) {
-                    const config = configDoc.data();
-                    let websites = config.websitesToVisit || [];
-                    
-                    // Remove website
-                    websites.splice(index, 1);
-                    
-                    await configRef.set({
-                        websitesToVisit: websites,
-                        updatedAt: new Date().toISOString()
-                    }, { merge: true });
-                    
-                    // Update local config
-                    appConfig.websitesToVisit = websites;
-                    
-                    await loadWebsites();
-                    await loadDashboardData();
-                    
-                    showToast('Website deleted successfully', 'success');
-                }
-                
-            } catch (error) {
-                console.error('Error deleting website:', error);
-                showToast('Error deleting website', 'error');
-            }
-            
-            hideLoading();
-        }
-        
-        async function resetAllVisits() {
-            if (!confirm('This will reset ALL website visits for ALL users. Users will be able to visit websites again to earn coins. Continue?')) {
-                return;
-            }
-            
-            showLoading();
-            
-            try {
-                // Update the reset date in config
-                const today = new Date().toISOString().split('T')[0];
-                await db.collection('config').doc('main').set({
-                    lastWebsiteResetDate: today,
-                    updatedAt: new Date().toISOString()
-                }, { merge: true });
-                
-                // Clear visited sites for all users
-                const usersSnapshot = await db.collection('users').get();
-                const batch = db.batch();
-                
-                usersSnapshot.forEach(doc => {
-                    const userRef = db.collection('users').doc(doc.id);
-                    batch.update(userRef, {
-                        visitedSitesToday: [],
-                        lastSiteVisitDate: today
-                    });
-                });
-                
-                await batch.commit();
-                
-                showToast('All website visits have been reset successfully!', 'success');
-                
-            } catch (error) {
-                console.error('Error resetting visits:', error);
-                showToast('Error resetting visits', 'error');
-            }
-            
-            hideLoading();
-        }
-        
-        // ===== WITHDRAWALS MANAGEMENT =====
-        async function loadWithdrawals(filter = 'pending') {
-            const tbody = document.getElementById('withdrawals-table');
-            tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-gray-400">Loading...</td></tr>';
-            
-            try {
-                let query = db.collection('withdrawals').orderBy('requestedAt', 'desc');
-                
-                if (filter !== 'all') {
-                    query = query.where('status', '==', filter);
-                }
-                
-                const snapshot = await query.get();
-                
-                if (snapshot.empty) {
-                    tbody.innerHTML = `<tr><td colspan="8" class="p-3 text-center text-gray-400">No ${filter} withdrawals found</td></tr>`;
-                    return;
-                }
-                
-                tbody.innerHTML = '';
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    const date = new Date(data.requestedAt).toLocaleDateString();
-                    
-                    let statusBadge = '';
-                    if (data.status === 'approved') {
-                        statusBadge = '<span class="badge-success">Approved</span>';
-                    } else if (data.status === 'rejected') {
-                        statusBadge = '<span class="badge-danger">Rejected</span>';
-                    } else {
-                        statusBadge = '<span class="badge-warning">Pending</span>';
-                    }
-                    
-                    const methodNames = {
-                        'bkash': 'bKash',
-                        'nagad': 'Nagad',
-                        'upi': 'UPI',
-                        'paytm': 'Paytm',
-                        'paypal': 'PayPal'
-                    };
-                    
-                    tbody.innerHTML += `
-                        <tr class="table-row">
-                            <td class="p-3 font-mono text-sm">${doc.id.substr(0, 8)}...</td>
-                            <td class="p-3">
-                                <div>
-                                    <p class="font-semibold">${data.userName || 'Unknown'}</p>
-                                    <p class="text-xs text-gray-400">${data.telegramUsername || 'No Telegram'}</p>
-                                </div>
-                            </td>
-                            <td class="p-3 font-bold">${data.amount} coins</td>
-                            <td class="p-3">${methodNames[data.method] || data.method}</td>
-                            <td class="p-3">
-                                <span class="bg-gray-800/50 px-2 py-1 rounded text-sm truncate max-w-xs block">
-                                    ${data.paymentDetail}
-                                </span>
-                            </td>
-                            <td class="p-3 text-sm">${date}</td>
-                            <td class="p-3">${statusBadge}</td>
-                            <td class="p-3">
-                                <div class="flex space-x-2">
-                                    ${data.status === 'pending' ? `
-                                        <button onclick="updateWithdrawal('${doc.id}', 'approved')" class="btn-success px-3 py-1 rounded text-sm">
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                        <button onclick="updateWithdrawal('${doc.id}', 'rejected')" class="btn-danger px-3 py-1 rounded text-sm">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    ` : ''}
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                });
-                
-            } catch (error) {
-                console.error('Error loading withdrawals:', error);
-                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-red-400">Error loading withdrawals</td></tr>';
-            }
-        }
-        
-        function filterWithdrawals(status) {
-            loadWithdrawals(status);
-        }
-        
-        async function updateWithdrawal(id, status) {
-            const action = status === 'approved' ? 'approve' : 'reject';
-            if (!confirm(`Are you sure you want to ${action} this withdrawal?`)) return;
-            
-            showLoading();
-            
-            try {
-                await db.collection('withdrawals').doc(id).update({
-                    status: status,
-                    processedAt: new Date().toISOString(),
-                    processedBy: currentAdmin.email
-                });
-                
-                await loadWithdrawals('pending');
-                await loadDashboardData();
-                
-                showToast(`Withdrawal ${status} successfully`, 'success');
-                
-            } catch (error) {
-                console.error('Error updating withdrawal:', error);
-                showToast('Error updating withdrawal', 'error');
-            }
-            
-            hideLoading();
-        }
-        
-        // ===== USER MANAGEMENT =====
-        async function loadUsers() {
-            showLoading();
-            
-            try {
-                const snapshot = await db.collection('users').orderBy('createdAt', 'desc').get();
-                allUsers = [];
-                
-                snapshot.forEach(doc => {
-                    allUsers.push({
-                        id: doc.id,
-                        ...doc.data()
-                    });
-                });
-                
-                filteredUsers = [...allUsers];
-                usersPage = 1;
-                renderUsersPage();
-                
-            } catch (error) {
-                console.error('Error loading users:', error);
-                showToast('Error loading users', 'error');
-            }
-            
-            hideLoading();
-        }
-        
-        function renderUsersPage() {
-            const tbody = document.getElementById('users-table');
-            const startIndex = (usersPage - 1) * usersPerPage;
-            const endIndex = startIndex + usersPerPage;
-            const pageUsers = filteredUsers.slice(startIndex, endIndex);
-            
-            if (filteredUsers.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-gray-400">No users found</td></tr>';
-                document.getElementById('users-pagination-info').textContent = 'Showing 0 of 0 users';
-                return;
-            }
-            
-            tbody.innerHTML = '';
-            pageUsers.forEach(user => {
-                const date = new Date(user.createdAt).toLocaleDateString();
-                
-                tbody.innerHTML += `
-                    <tr class="table-row">
-                        <td class="p-3 font-mono text-sm">${user.id.substr(0, 8)}...</td>
-                        <td class="p-3 font-semibold">${user.name || 'Unknown'}</td>
-                        <td class="p-3">
-                            <div>
-                                <p class="text-sm">@${user.telegramUsername || 'No Telegram'}</p>
-                                <p class="text-xs text-gray-400">ID: ${user.telegramId || 'N/A'}</p>
-                            </div>
-                        </td>
-                        <td class="p-3">
-                            <span class="bg-gray-800/50 px-2 py-1 rounded text-sm">
-                                ${user.country ? user.country.toUpperCase() : '??'}
-                            </span>
-                        </td>
-                        <td class="p-3 font-bold text-yellow-400">${user.balance || 0}</td>
-                        <td class="p-3">${user.totalEarned || 0}</td>
-                        <td class="p-3 text-sm">${date}</td>
-                        <td class="p-3">
-                            <div class="flex space-x-2">
-                                <button onclick="viewUserDetails('${user.id}')" class="btn-secondary px-3 py-1 rounded text-sm">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button onclick="editUserBalance('${user.id}')" class="btn-primary px-3 py-1 rounded text-sm">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-            
-            document.getElementById('users-pagination-info').textContent = 
-                `Showing ${startIndex + 1}-${Math.min(endIndex, filteredUsers.length)} of ${filteredUsers.length} users`;
-        }
-        
-        function searchUsers() {
-            const searchTerm = document.getElementById('user-search').value.toLowerCase();
-            
-            if (!searchTerm) {
-                filteredUsers = [...allUsers];
-            } else {
-                filteredUsers = allUsers.filter(user => 
-                    (user.name && user.name.toLowerCase().includes(searchTerm)) ||
-                    (user.email && user.email.toLowerCase().includes(searchTerm)) ||
-                    (user.telegramUsername && user.telegramUsername.toLowerCase().includes(searchTerm)) ||
-                    (user.country && user.country.toLowerCase().includes(searchTerm))
-                );
-            }
-            
-            usersPage = 1;
-            renderUsersPage();
-        }
-        
-        function previousUsersPage() {
-            if (usersPage > 1) {
-                usersPage--;
-                renderUsersPage();
-            }
-        }
-        
-        function nextUsersPage() {
-            const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
-            if (usersPage < totalPages) {
-                usersPage++;
-                renderUsersPage();
-            }
-        }
-        
-        async function viewUserDetails(userId) {
-            showLoading();
-            
-            try {
-                const userDoc = await db.collection('users').doc(userId).get();
-                if (!userDoc.exists) {
-                    showToast('User not found', 'error');
-                    return;
-                }
-                
-                const user = userDoc.data();
-                const detailsEl = document.getElementById('user-details');
-                
-                detailsEl.innerHTML = `
-                    <div class="space-y-6">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="bg-gray-800/50 p-4 rounded-lg">
-                                <p class="text-sm text-gray-400">Name</p>
-                                <p class="font-semibold">${user.name || 'Unknown'}</p>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded-lg">
-                                <p class="text-sm text-gray-400">Email</p>
-                                <p class="font-semibold">${user.email || 'N/A'}</p>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded-lg">
-                                <p class="text-sm text-gray-400">Telegram</p>
-                                <p class="font-semibold">@${user.telegramUsername || 'N/A'}</p>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded-lg">
-                                <p class="text-sm text-gray-400">Country</p>
-                                <p class="font-semibold">${user.country ? user.country.toUpperCase() : '??'}</p>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded-lg">
-                                <p class="text-sm text-gray-400">Current Balance</p>
-                                <p class="font-semibold text-yellow-400">${user.balance || 0} coins</p>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded-lg">
-                                <p class="text-sm text-gray-400">Total Earned</p>
-                                <p class="font-semibold text-green-400">${user.totalEarned || 0} coins</p>
-                            </div>
-                        </div>
-                        
-                        <div class="bg-gray-800/50 p-4 rounded-lg">
-                            <p class="text-sm text-gray-400 mb-2">Joined Date</p>
-                            <p class="font-semibold">${new Date(user.createdAt).toLocaleString()}</p>
-                        </div>
-                        
-                        <div class="bg-gray-800/50 p-4 rounded-lg">
-                            <p class="text-sm text-gray-400 mb-2">User ID</p>
-                            <p class="font-mono text-sm break-all">${userId}</p>
-                        </div>
-                        
-                        <div class="flex space-x-3">
-                            <button onclick="closeUserModal()" class="flex-1 btn-secondary p-3 rounded-lg">
-                                Close
-                            </button>
-                            <button onclick="editUserBalance('${userId}')" class="flex-1 btn-primary p-3 rounded-lg">
-                                <i class="fas fa-coins mr-2"></i>Edit Balance
-                            </button>
-                        </div>
-                    </div>
-                `;
-                
-                document.getElementById('user-modal').classList.remove('hidden');
-                
-            } catch (error) {
-                console.error('Error loading user details:', error);
-                showToast('Error loading user details', 'error');
-            }
-            
-            hideLoading();
-        }
-        
-        function closeUserModal() {
-            document.getElementById('user-modal').classList.add('hidden');
-        }
-        
-        async function editUserBalance(userId) {
-            const newBalance = prompt('Enter new balance (coins):');
-            if (newBalance === null) return;
-            
-            const balance = parseInt(newBalance);
-            if (isNaN(balance) || balance < 0) {
-                showToast('Please enter a valid positive number', 'warning');
-                return;
-            }
-            
-            showLoading();
-            
-            try {
-                await db.collection('users').doc(userId).update({
-                    balance: balance
-                });
-                
-                showToast('User balance updated successfully', 'success');
-                
-                // Reload users and dashboard
-                await loadUsers();
-                await loadDashboardData();
-                
-                // Update user modal if open
-                if (document.getElementById('user-modal').classList.contains('hidden') === false) {
-                    await viewUserDetails(userId);
-                }
-                
-            } catch (error) {
-                console.error('Error updating user balance:', error);
-                showToast('Error updating user balance', 'error');
-            }
-            
-            hideLoading();
-        }
-        
-        // ===== SETTINGS =====
-        async function loadSettings() {
-            try {
-                const configDoc = await db.collection('config').doc('main').get();
-                if (!configDoc.exists) {
-                    showToast('Config not found. Creating default...', 'warning');
-                    await initializeConfig();
-                    return;
-                }
-                
-                appConfig = configDoc.data();
-                
-                // Populate settings form
-                document.getElementById('min-withdrawal').value = appConfig.minWithdrawal || 1000;
-                document.getElementById('coin-value-coins').value = appConfig.coinValueCoins || 1000;
-                document.getElementById('coin-value-inr').value = appConfig.coinValueInr || 10;
-                document.getElementById('ipinfo-token').value = appConfig.ipinfoApiToken || '';
-                document.getElementById('allowed-countries').value = (appConfig.allowedCountries || []).join(', ');
-                document.getElementById('blocked-message').value = appConfig.blockedCountryMessage || 'Sorry, this app is not available in your country.';
-                
-                // Set payment methods checkboxes
-                const paymentMethods = appConfig.paymentMethods || [];
-                document.getElementById('bkash-enabled').checked = paymentMethods.includes('bKash');
-                document.getElementById('nagad-enabled').checked = paymentMethods.includes('Nagad');
-                document.getElementById('upi-enabled').checked = paymentMethods.includes('UPI');
-                document.getElementById('paytm-enabled').checked = paymentMethods.includes('Paytm');
-                document.getElementById('paypal-enabled').checked = paymentMethods.includes('PayPal');
-                
-            } catch (error) {
-                console.error('Error loading settings:', error);
-                showToast('Error loading settings', 'error');
-            }
-        }
-        
-        async function saveSettings() {
-            showLoading();
-            
-            try {
-                // Get payment methods
-                const paymentMethods = [];
-                if (document.getElementById('bkash-enabled').checked) paymentMethods.push('bKash');
-                if (document.getElementById('nagad-enabled').checked) paymentMethods.push('Nagad');
-                if (document.getElementById('upi-enabled').checked) paymentMethods.push('UPI');
-                if (document.getElementById('paytm-enabled').checked) paymentMethods.push('Paytm');
-                if (document.getElementById('paypal-enabled').checked) paymentMethods.push('PayPal');
-                
-                // Get allowed countries
-                const allowedCountries = document.getElementById('allowed-countries').value
-                    .split(',')
-                    .map(c => c.trim())
-                    .filter(c => c.length === 2);
-                
-                // Update config
-                await db.collection('config').doc('main').set({
-                    minWithdrawal: parseInt(document.getElementById('min-withdrawal').value) || 1000,
-                    coinValueCoins: parseInt(document.getElementById('coin-value-coins').value) || 1000,
-                    coinValueInr: parseInt(document.getElementById('coin-value-inr').value) || 10,
-                    ipinfoApiToken: document.getElementById('ipinfo-token').value.trim(),
-                    allowedCountries: allowedCountries,
-                    blockedCountryMessage: document.getElementById('blocked-message').value.trim(),
-                    paymentMethods: paymentMethods,
-                    updatedAt: new Date().toISOString()
-                }, { merge: true });
-                
-                // Reload settings
-                await loadSettings();
-                await loadDashboardData();
-                
-                showToast('Settings saved successfully', 'success');
-                
-            } catch (error) {
-                console.error('Error saving settings:', error);
-                showToast('Error saving settings', 'error');
-            }
-            
-            hideLoading();
-        }
-        
-        // ===== ANALYTICS =====
-        async function loadAnalytics() {
-            try {
-                // Get today's date
-                const today = new Date().toISOString().split('T')[0];
-                
-                // Load new users today
-                const usersSnapshot = await db.collection('users').get();
-                const newUsersToday = Array.from(usersSnapshot.docs).filter(doc => {
-                    const userDate = doc.data().createdAt.split('T')[0];
-                    return userDate === today;
-                }).length;
-                
-                document.getElementById('new-users-today').textContent = newUsersToday;
-                
-                // Load website visits today (estimated)
-                let visitsToday = 0;
-                usersSnapshot.forEach(doc => {
-                    const userData = doc.data();
-                    if (userData.visitedSitesToday && userData.lastSiteVisitDate === today) {
-                        visitsToday += userData.visitedSitesToday.length;
-                    }
-                });
-                
-                document.getElementById('visits-today').textContent = visitsToday;
-                
-                // Load coins earned today (estimated)
-                let coinsToday = 0;
-                usersSnapshot.forEach(doc => {
-                    const userData = doc.data();
-                    if (userData.todayEarnings) {
-                        coinsToday += userData.todayEarnings;
-                    }
-                });
-                
-                document.getElementById('coins-today').textContent = coinsToday;
-                
-                // Load withdrawals today
-                const withdrawalsToday = await db.collection('withdrawals')
-                    .where('requestedAt', '>=', today)
-                    .get();
-                
-                document.getElementById('withdrawals-today').textContent = withdrawalsToday.size;
-                
-                // Load top countries
-                const countryMap = {};
-                usersSnapshot.forEach(doc => {
-                    const country = doc.data().country || 'unknown';
-                    countryMap[country] = (countryMap[country] || 0) + 1;
-                });
-                
-                const topCountries = Object.entries(countryMap)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5);
-                
-                const countriesEl = document.getElementById('top-countries');
-                countriesEl.innerHTML = '';
-                
-                if (topCountries.length === 0) {
-                    countriesEl.innerHTML = '<div class="text-gray-400">No country data available</div>';
-                } else {
-                    topCountries.forEach(([country, count]) => {
-                        const percentage = (count / usersSnapshot.size * 100).toFixed(1);
-                        countriesEl.innerHTML += `
-                            <div class="mb-4">
-                                <div class="flex justify-between mb-1">
-                                    <span>${country === 'unknown' ? 'Unknown' : country.toUpperCase()}</span>
-                                    <span class="font-semibold">${count} users (${percentage}%)</span>
-                                </div>
-                                <div class="w-full bg-gray-800 rounded-full h-2">
-                                    <div class="bg-gradient-to-r from-yellow-500 to-yellow-600 h-2 rounded-full" 
-                                         style="width: ${percentage}%"></div>
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-                
-                // Load activity chart (last 7 days)
-                const activityEl = document.getElementById('activity-chart');
-                activityEl.innerHTML = '';
-                
-                const last7Days = [];
-                for (let i = 6; i >= 0; i--) {
-                    const date = new Date();
-                    date.setDate(date.getDate() - i);
-                    last7Days.push(date.toISOString().split('T')[0]);
-                }
-                
-                // Get user registrations per day
-                const userRegistrations = last7Days.map(day => {
-                    return Array.from(usersSnapshot.docs).filter(doc => {
-                        const userDate = doc.data().createdAt.split('T')[0];
-                        return userDate === day;
-                    }).length;
-                });
-                
-                const maxRegistrations = Math.max(...userRegistrations, 1);
-                
-                last7Days.forEach((day, index) => {
-                    const height = (userRegistrations[index] / maxRegistrations * 100) + 10;
-                    const dateLabel = new Date(day).toLocaleDateString('en-US', { weekday: 'short' });
-                    
-                    activityEl.innerHTML += `
-                        <div class="flex-1 flex flex-col items-center">
-                            <div class="w-full bg-gradient-to-t from-yellow-500 to-yellow-600 rounded-t-lg" 
-                                 style="height: ${height}px" 
-                                 title="${dateLabel}: ${userRegistrations[index]} users">
-                            </div>
-                            <span class="mt-2 text-xs text-gray-400">${dateLabel}</span>
-                        </div>
-                    `;
-                });
-                
-            } catch (error) {
-                console.error('Error loading analytics:', error);
-                showToast('Error loading analytics', 'error');
-            }
-        }
-        
-        // ===== UTILITY FUNCTIONS =====
-        function setupEventListeners() {
-            // Enter key in login form
-            document.getElementById('login-password').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') login();
-            });
-            
-            // Enter key in user search
-            document.getElementById('user-search').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') searchUsers();
-            });
-        }
-        
-        function showLoading() {
-            document.getElementById('loading-overlay').classList.remove('hidden');
-        }
-        
-        function hideLoading() {
-            document.getElementById('loading-overlay').classList.add('hidden');
-        }
-        
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toast-message');
-            
-            toastMessage.textContent = message;
-            toast.className = `toast ${type}`;
-            
-            // Remove existing classes
-            toast.classList.remove('success', 'error', 'warning');
-            toast.classList.add(type);
-            
-            // Show toast
-            setTimeout(() => {
-                toast.classList.add('show');
-            }, 100);
-            
-            // Hide after 3 seconds
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
-    </script>
 </body>
 </html>

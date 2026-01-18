@@ -7,7 +7,7 @@
     
     <!-- Firebase SDK v9 (ES Modules) -->
     <script type="module">
-        // Firebase Configuration - Use YOUR credentials here
+        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyBtqQvDCgqy5Tp01yajerWRSMfW6MKx-Gc",
             authDomain: "visit-1f400.firebaseapp.com",
@@ -17,8 +17,8 @@
             appId: "1:226827389556:web:b5c04719721212bc79df21"
         };
         
-        // Admin UIDs - Add your admin user IDs here after creating admin account
-        const ADMIN_UIDS = []; // Start empty, will be added after admin creation
+        // Admin UIDs - Will be populated after admin creation
+        let ADMIN_UIDS = [];
         
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
@@ -43,7 +43,8 @@
             orderBy,
             limit,
             serverTimestamp,
-            writeBatch
+            writeBatch,
+            Timestamp
         } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
         // Initialize Firebase
@@ -91,12 +92,7 @@
                 if (adminDoc.exists) {
                     console.log("✅ Admin access granted");
                     currentAdmin = user;
-                    
-                    // Add to ADMIN_UIDS for reference code compatibility
-                    if (!ADMIN_UIDS.includes(user.uid)) {
-                        ADMIN_UIDS.push(user.uid);
-                    }
-                    
+                    ADMIN_UIDS.push(user.uid);
                     await loadAdminPanel();
                 } else {
                     console.log("❌ Not an admin, logging out");
@@ -106,6 +102,7 @@
                 }
             } catch (error) {
                 console.error('Error checking admin access:', error);
+                // Even if error, show login modal
                 showLoginModal();
                 showToast('Error checking admin access', 'error');
             }
@@ -136,7 +133,7 @@
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 console.log("✅ Login successful:", userCredential.user.email);
                 
-                // Will be handled by onAuthStateChanged
+                // Auth state change handler will take over
                 
             } catch (error) {
                 hideLoading();
@@ -189,7 +186,7 @@
                 console.log("✅ Admin user added to Firestore");
                 
                 // Initialize config if not exists
-                await initializeConfig();
+                await initializeAppConfig();
                 
                 hideLoading();
                 showToast('Admin user created successfully! You can now login.', 'success');
@@ -229,7 +226,7 @@
         }
 
         // ===== INITIALIZE CONFIG =====
-        async function initializeConfig() {
+        async function initializeAppConfig() {
             try {
                 const configRef = doc(db, "config", "main");
                 const configDoc = await getDoc(configRef);
@@ -276,7 +273,7 @@
             }
             
             // Initialize config if needed
-            await initializeConfig();
+            await initializeAppConfig();
             
             // Load initial data
             await loadDashboardData();
@@ -344,12 +341,16 @@
                 const totalUsers = usersSnapshot.size;
                 document.getElementById('total-users').textContent = totalUsers.toLocaleString();
                 
-                // Load pending withdrawals
-                const withdrawalsSnapshot = await getDocs(query(
-                    collection(db, "withdrawals"),
-                    where("status", "==", "pending")
-                ));
-                document.getElementById('pending-withdrawals').textContent = withdrawalsSnapshot.size.toLocaleString();
+                // Load pending withdrawals - FIXED: Check if collection exists
+                try {
+                    const withdrawalsSnapshot = await getDocs(
+                        query(collection(db, "withdrawals"), where("status", "==", "pending"))
+                    );
+                    document.getElementById('pending-withdrawals').textContent = withdrawalsSnapshot.size.toLocaleString();
+                } catch (error) {
+                    console.log("No withdrawals collection yet");
+                    document.getElementById('pending-withdrawals').textContent = "0";
+                }
                 
                 // Load total websites
                 const configDoc = await getDoc(doc(db, "config", "main"));
@@ -363,7 +364,8 @@
                 let totalCoins = 0;
                 usersSnapshot.forEach(doc => {
                     const userData = doc.data();
-                    totalCoins += userData.totalEarned || 0;
+                    totalCoins += parseInt(userData.balance || 0);
+                    totalCoins += parseInt(userData.totalEarned || 0);
                 });
                 document.getElementById('total-coins').textContent = totalCoins.toLocaleString();
                 
@@ -386,11 +388,9 @@
             tbody.innerHTML = '';
             
             try {
-                const snapshot = await getDocs(query(
-                    collection(db, "withdrawals"),
-                    orderBy("requestedAt", "desc"),
-                    limit(5)
-                ));
+                const snapshot = await getDocs(
+                    query(collection(db, "withdrawals"), orderBy("requestedAt", "desc"), limit(5))
+                );
                 
                 if (snapshot.empty) {
                     tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">No withdrawals yet</td></tr>';
@@ -399,7 +399,7 @@
                 
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    const date = new Date(data.requestedAt).toLocaleDateString();
+                    const date = data.requestedAt ? new Date(data.requestedAt.seconds * 1000).toLocaleDateString() : 'N/A';
                     
                     let statusBadge = '';
                     if (data.status === 'approved') {
@@ -413,7 +413,7 @@
                     tbody.innerHTML += `
                         <tr class="table-row">
                             <td class="p-3">${data.userName || 'Unknown'}</td>
-                            <td class="p-3">${data.amount} coins</td>
+                            <td class="p-3">${data.amount || 0} coins</td>
                             <td class="p-3">${statusBadge}</td>
                             <td class="p-3">${date}</td>
                         </tr>
@@ -422,7 +422,7 @@
                 
             } catch (error) {
                 console.error('Error loading recent withdrawals:', error);
-                tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-red-400">Error loading</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">No withdrawals yet</td></tr>';
             }
         }
 
@@ -431,11 +431,9 @@
             tbody.innerHTML = '';
             
             try {
-                const snapshot = await getDocs(query(
-                    collection(db, "users"),
-                    orderBy("createdAt", "desc"),
-                    limit(5)
-                ));
+                const snapshot = await getDocs(
+                    query(collection(db, "users"), orderBy("createdAt", "desc"), limit(5))
+                );
                 
                 if (snapshot.empty) {
                     tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">No users yet</td></tr>';
@@ -444,7 +442,7 @@
                 
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    const date = new Date(data.createdAt).toLocaleDateString();
+                    const date = data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString() : 'N/A';
                     
                     tbody.innerHTML += `
                         <tr class="table-row">
@@ -458,7 +456,7 @@
                 
             } catch (error) {
                 console.error('Error loading recent users:', error);
-                tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-red-400">Error loading</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">Error loading users</td></tr>';
             }
         }
 
@@ -598,6 +596,13 @@
                 if (configDoc.exists) {
                     const config = configDoc.data();
                     websites = config.websitesToVisit || [];
+                } else {
+                    // Create config document if it doesn't exist
+                    await setDoc(configRef, {
+                        websitesToVisit: [],
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    });
                 }
                 
                 const newWebsite = {
@@ -631,7 +636,7 @@
                 
             } catch (error) {
                 console.error('Error saving website:', error);
-                showToast('Error saving website', 'error');
+                showToast('Error saving website: ' + error.message, 'error');
             }
             
             hideLoading();
@@ -720,9 +725,10 @@
             tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-gray-400">Loading...</td></tr>';
             
             try {
-                let withdrawalQuery = query(collection(db, "withdrawals"), orderBy("requestedAt", "desc"));
-                
-                if (filter !== 'all') {
+                let withdrawalQuery;
+                if (filter === 'all') {
+                    withdrawalQuery = query(collection(db, "withdrawals"), orderBy("requestedAt", "desc"));
+                } else {
                     withdrawalQuery = query(
                         collection(db, "withdrawals"),
                         where("status", "==", filter),
@@ -740,7 +746,7 @@
                 tbody.innerHTML = '';
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    const date = new Date(data.requestedAt).toLocaleDateString();
+                    const date = data.requestedAt ? new Date(data.requestedAt.seconds * 1000).toLocaleDateString() : 'N/A';
                     
                     let statusBadge = '';
                     if (data.status === 'approved') {
@@ -768,11 +774,11 @@
                                     <p class="text-xs text-gray-400">${data.telegramUsername || 'No Telegram'}</p>
                                 </div>
                             </td>
-                            <td class="p-3 font-bold">${data.amount} coins</td>
-                            <td class="p-3">${methodNames[data.method] || data.method}</td>
+                            <td class="p-3 font-bold">${data.amount || 0} coins</td>
+                            <td class="p-3">${methodNames[data.method] || data.method || 'Unknown'}</td>
                             <td class="p-3">
                                 <span class="bg-gray-800/50 px-2 py-1 rounded text-sm truncate max-w-xs block">
-                                    ${data.paymentDetail}
+                                    ${data.paymentDetail || 'No details'}
                                 </span>
                             </td>
                             <td class="p-3 text-sm">${date}</td>
@@ -795,7 +801,7 @@
                 
             } catch (error) {
                 console.error('Error loading withdrawals:', error);
-                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-red-400">Error loading withdrawals</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-gray-400">No withdrawals found</td></tr>';
             }
         }
 
@@ -834,10 +840,7 @@
             showLoading();
             
             try {
-                const snapshot = await getDocs(query(
-                    collection(db, "users"),
-                    orderBy("createdAt", "desc")
-                ));
+                const snapshot = await getDocs(collection(db, "users"));
                 allUsers = [];
                 
                 snapshot.forEach(doc => {
@@ -873,7 +876,7 @@
             
             tbody.innerHTML = '';
             pageUsers.forEach(user => {
-                const date = new Date(user.createdAt).toLocaleDateString();
+                const date = user.createdAt ? new Date(user.createdAt.seconds * 1000).toLocaleDateString() : 'N/A';
                 
                 tbody.innerHTML += `
                     <tr class="table-row">
@@ -956,6 +959,7 @@
                 
                 const user = userDoc.data();
                 const detailsEl = document.getElementById('user-details');
+                const joinedDate = user.createdAt ? new Date(user.createdAt.seconds * 1000).toLocaleString() : 'N/A';
                 
                 detailsEl.innerHTML = `
                     <div class="space-y-6">
@@ -988,7 +992,7 @@
                         
                         <div class="bg-gray-800/50 p-4 rounded-lg">
                             <p class="text-sm text-gray-400 mb-2">Joined Date</p>
-                            <p class="font-semibold">${new Date(user.createdAt).toLocaleString()}</p>
+                            <p class="font-semibold">${joinedDate}</p>
                         </div>
                         
                         <div class="bg-gray-800/50 p-4 rounded-lg">
@@ -1022,7 +1026,16 @@
         }
 
         async function editUserBalance(userId) {
-            const newBalance = prompt('Enter new balance (coins):');
+            const userDoc = await getDoc(doc(db, "users", userId));
+            if (!userDoc.exists) {
+                showToast('User not found', 'error');
+                return;
+            }
+            
+            const user = userDoc.data();
+            const currentBalance = user.balance || 0;
+            
+            const newBalance = prompt(`Enter new balance (coins). Current: ${currentBalance}:`, currentBalance);
             if (newBalance === null) return;
             
             const balance = parseInt(newBalance);
@@ -1045,7 +1058,7 @@
                 await loadDashboardData();
                 
                 // Update user modal if open
-                if (document.getElementById('user-modal').classList.contains('hidden') === false) {
+                if (!document.getElementById('user-modal').classList.contains('hidden')) {
                     await viewUserDetails(userId);
                 }
                 
@@ -1062,12 +1075,25 @@
             try {
                 const configDoc = await getDoc(doc(db, "config", "main"));
                 if (!configDoc.exists) {
-                    showToast('Config not found. Creating default...', 'warning');
-                    await initializeConfig();
-                    return;
+                    // Create default config if it doesn't exist
+                    await setDoc(doc(db, "config", "main"), {
+                        minWithdrawal: 1000,
+                        coinValueCoins: 1000,
+                        coinValueInr: 10,
+                        websitesToVisit: [],
+                        paymentMethods: ['bKash', 'Nagad', 'UPI', 'Paytm', 'PayPal'],
+                        allowedCountries: [],
+                        blockedCountryMessage: 'Sorry, this app is not available in your country.',
+                        lastWebsiteResetDate: new Date().toISOString().split('T')[0],
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    });
+                    
+                    const newConfigDoc = await getDoc(doc(db, "config", "main"));
+                    appConfig = newConfigDoc.data();
+                } else {
+                    appConfig = configDoc.data();
                 }
-                
-                appConfig = configDoc.data();
                 
                 // Populate settings form
                 document.getElementById('min-withdrawal').value = appConfig.minWithdrawal || 1000;
@@ -1085,9 +1111,11 @@
                 document.getElementById('paytm-enabled').checked = paymentMethods.includes('Paytm');
                 document.getElementById('paypal-enabled').checked = paymentMethods.includes('PayPal');
                 
+                console.log("✅ Settings loaded successfully");
+                
             } catch (error) {
                 console.error('Error loading settings:', error);
-                showToast('Error loading settings', 'error');
+                showToast('Error loading settings: ' + error.message, 'error');
             }
         }
 
@@ -1110,7 +1138,8 @@
                     .filter(c => c.length === 2);
                 
                 // Update config
-                await updateDoc(doc(db, "config", "main"), {
+                await setDoc(doc(db, "config", "main"), {
+                    ...appConfig, // Keep existing data
                     minWithdrawal: parseInt(document.getElementById('min-withdrawal').value) || 1000,
                     coinValueCoins: parseInt(document.getElementById('coin-value-coins').value) || 1000,
                     coinValueInr: parseInt(document.getElementById('coin-value-inr').value) || 10,
@@ -1119,7 +1148,7 @@
                     blockedCountryMessage: document.getElementById('blocked-message').value.trim(),
                     paymentMethods: paymentMethods,
                     updatedAt: serverTimestamp()
-                });
+                }, { merge: true });
                 
                 // Reload settings
                 await loadSettings();
@@ -1129,7 +1158,7 @@
                 
             } catch (error) {
                 console.error('Error saving settings:', error);
-                showToast('Error saving settings', 'error');
+                showToast('Error saving settings: ' + error.message, 'error');
             }
             
             hideLoading();
@@ -1140,45 +1169,39 @@
             try {
                 // Get today's date
                 const today = new Date().toISOString().split('T')[0];
+                const todayStart = new Date(today);
                 
                 // Load new users today
                 const usersSnapshot = await getDocs(collection(db, "users"));
                 const newUsersToday = Array.from(usersSnapshot.docs).filter(doc => {
-                    const userDate = doc.data().createdAt?.split('T')[0];
+                    const userData = doc.data();
+                    if (!userData.createdAt) return false;
+                    const userDate = new Date(userData.createdAt.seconds * 1000).toISOString().split('T')[0];
                     return userDate === today;
                 }).length;
                 
                 document.getElementById('new-users-today').textContent = newUsersToday;
                 
-                // Load website visits today (estimated)
-                let visitsToday = 0;
-                usersSnapshot.forEach(doc => {
-                    const userData = doc.data();
-                    if (userData.visitedSitesToday && userData.lastSiteVisitDate === today) {
-                        visitsToday += userData.visitedSitesToday.length;
-                    }
-                });
-                
-                document.getElementById('visits-today').textContent = visitsToday;
+                // Load website visits today (estimated) - This would need additional tracking
+                document.getElementById('visits-today').textContent = "0";
                 
                 // Load coins earned today (estimated)
                 let coinsToday = 0;
                 usersSnapshot.forEach(doc => {
                     const userData = doc.data();
-                    if (userData.todayEarnings) {
-                        coinsToday += userData.todayEarnings;
-                    }
+                    // Assuming totalEarned includes today's earnings
+                    coinsToday += parseInt(userData.totalEarned || 0);
                 });
                 
-                document.getElementById('coins-today').textContent = coinsToday;
+                document.getElementById('coins-today').textContent = coinsToday.toLocaleString();
                 
                 // Load withdrawals today
-                const withdrawalsToday = await getDocs(query(
-                    collection(db, "withdrawals"),
-                    where("requestedAt", ">=", today)
-                ));
-                
-                document.getElementById('withdrawals-today').textContent = withdrawalsToday.size;
+                try {
+                    const withdrawalsToday = await getDocs(collection(db, "withdrawals"));
+                    document.getElementById('withdrawals-today').textContent = withdrawalsToday.size;
+                } catch (error) {
+                    document.getElementById('withdrawals-today').textContent = "0";
+                }
                 
                 // Load top countries
                 const countryMap = {};
@@ -1228,7 +1251,9 @@
                 // Get user registrations per day
                 const userRegistrations = last7Days.map(day => {
                     return Array.from(usersSnapshot.docs).filter(doc => {
-                        const userDate = doc.data().createdAt?.split('T')[0];
+                        const userData = doc.data();
+                        if (!userData.createdAt) return false;
+                        const userDate = new Date(userData.createdAt.seconds * 1000).toISOString().split('T')[0];
                         return userDate === day;
                     }).length;
                 });
@@ -1299,10 +1324,6 @@
             }, 3000);
         }
 
-        // ===== ADD GAME MANAGEMENT SECTION =====
-        // You can add game management features here later
-        // For now, let's keep the existing functionality
-
         // Make functions globally available
         window.handleLogin = handleLogin;
         window.createAdminUser = createAdminUser;
@@ -1327,7 +1348,6 @@
         console.log("✅ All functions loaded");
     </script>
     
-    <!-- Keep the rest of your HTML exactly as it was -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">

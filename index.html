@@ -97,6 +97,19 @@
             transform: translateY(-2px);
         }
         
+        .btn-success {
+            background: linear-gradient(45deg, #34c759, #30d158);
+            color: white;
+            font-weight: bold;
+            border: none;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-success:hover {
+            background: linear-gradient(45deg, #30d158, #34c759);
+            transform: translateY(-2px);
+        }
+        
         .stat-card {
             background: linear-gradient(145deg, rgba(250, 204, 21, 0.1), rgba(0, 0, 0, 0.3));
             border: 1px solid rgba(250, 204, 21, 0.2);
@@ -273,6 +286,13 @@
                 <button onclick="login()" class="w-full btn-primary p-3 rounded-lg font-bold">
                     <i class="fas fa-sign-in-alt mr-2"></i>Login
                 </button>
+                
+                <div class="text-center mt-4 pt-4 border-t border-gray-800">
+                    <p class="text-sm text-gray-400">Don't have admin access?</p>
+                    <button onclick="createAdminUser()" class="text-yellow-400 hover:text-yellow-300 text-sm mt-2">
+                        <i class="fas fa-user-plus mr-1"></i>Create Admin Account (First Time Only)
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -293,12 +313,12 @@
                 </div>
                 
                 <div class="space-y-2">
-                    <a href="#" onclick="showSection('dashboard')" class="sidebar-link flex items-center space-x-3 p-3">
+                    <a href="#" onclick="showSection('dashboard')" class="sidebar-link flex items-center space-x-3 p-3 active">
                         <i class="fas fa-tachometer-alt w-5"></i>
                         <span>Dashboard</span>
                     </a>
                     
-                    <a href="#" onclick="showSection('websites')" class="sidebar-link flex items-center space-x-3 p-3 active">
+                    <a href="#" onclick="showSection('websites')" class="sidebar-link flex items-center space-x-3 p-3">
                         <i class="fas fa-globe w-5"></i>
                         <span>Websites</span>
                     </a>
@@ -372,7 +392,7 @@
                             <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
                                 <i class="fas fa-users text-white"></i>
                             </div>
-                            <span class="text-sm text-gray-400">Today</span>
+                            <span class="text-sm text-gray-400">Total</span>
                         </div>
                         <h3 class="text-2xl font-bold mb-1" id="total-users">0</h3>
                         <p class="text-gray-400">Total Users</p>
@@ -427,7 +447,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="recent-withdrawals">
-                                    <!-- Will be populated dynamically -->
+                                    <tr><td colspan="4" class="p-3 text-center text-gray-400">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -446,7 +466,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="recent-users">
-                                    <!-- Will be populated dynamically -->
+                                    <tr><td colspan="4" class="p-3 text-center text-gray-400">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -502,7 +522,7 @@
                                 </tr>
                             </thead>
                             <tbody id="websites-table">
-                                <!-- Will be populated dynamically -->
+                                <tr><td colspan="7" class="p-3 text-center text-gray-400">Loading websites...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -559,7 +579,7 @@
                                 </tr>
                             </thead>
                             <tbody id="withdrawals-table">
-                                <!-- Will be populated dynamically -->
+                                <tr><td colspan="8" class="p-3 text-center text-gray-400">Loading withdrawals...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -598,7 +618,7 @@
                                 </tr>
                             </thead>
                             <tbody id="users-table">
-                                <!-- Will be populated dynamically -->
+                                <tr><td colspan="8" class="p-3 text-center text-gray-400">Loading users...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -819,7 +839,7 @@ Leave empty to allow all countries"></textarea>
                     <div class="card p-6">
                         <h3 class="text-xl font-bold mb-4 gold-text">Top Countries</h3>
                         <div id="top-countries">
-                            <!-- Will be populated dynamically -->
+                            <div class="text-gray-400">Loading...</div>
                         </div>
                     </div>
                     
@@ -827,7 +847,9 @@ Leave empty to allow all countries"></textarea>
                     <div class="card p-6 col-span-1 lg:col-span-2">
                         <h3 class="text-xl font-bold mb-4 gold-text">User Activity (Last 7 Days)</h3>
                         <div class="h-64 flex items-end space-x-2" id="activity-chart">
-                            <!-- Will be populated dynamically -->
+                            <div class="flex-1 flex flex-col items-center">
+                                <div class="text-gray-400">Loading chart...</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -895,14 +917,13 @@ Leave empty to allow all countries"></textarea>
             </div>
             
             <div id="user-details">
-                <!-- Will be populated dynamically -->
+                <div class="text-gray-400">Loading user details...</div>
             </div>
         </div>
     </div>
 
     <script>
-        // Firebase Configuration (Same as mini app)
-        <script type="module">
+        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyBtqQvDCgqy5Tp01yajerWRSMfW6MKx-Gc",
             authDomain: "visit-1f400.firebaseapp.com",
@@ -911,7 +932,7 @@ Leave empty to allow all countries"></textarea>
             messagingSenderId: "226827389556",
             appId: "1:226827389556:web:b5c04719721212bc79df21"
         };
-        const ADMIN_UIDS = ["Z6LTNwBdUOXooqmLZWS6ZxCG0bf1"];
+        
         // Initialize Firebase
         const app = firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -923,6 +944,7 @@ Leave empty to allow all countries"></textarea>
         const usersPerPage = 10;
         let allUsers = [];
         let filteredUsers = [];
+        let appConfig = {};
         
         // Initialize
         window.onload = async () => {
@@ -933,7 +955,7 @@ Leave empty to allow all countries"></textarea>
             auth.onAuthStateChanged(async (user) => {
                 if (user) {
                     currentAdmin = user;
-                    await loadAdminPanel();
+                    await checkAdminAccess(user);
                 } else {
                     showLoginModal();
                 }
@@ -941,6 +963,27 @@ Leave empty to allow all countries"></textarea>
         };
         
         // ===== AUTHENTICATION =====
+        async function checkAdminAccess(user) {
+            showLoading();
+            try {
+                const adminDoc = await db.collection('adminUsers').doc(user.uid).get();
+                if (adminDoc.exists) {
+                    currentAdmin = user;
+                    await loadAdminPanel();
+                } else {
+                    await auth.signOut();
+                    showLoginModal();
+                    showToast('Access denied. Admin privileges required.', 'error');
+                }
+            } catch (error) {
+                console.error('Error checking admin access:', error);
+                await auth.signOut();
+                showLoginModal();
+                showToast('Error checking admin access', 'error');
+            }
+            hideLoading();
+        }
+        
         function showLoginModal() {
             document.getElementById('login-modal').classList.remove('hidden');
             document.getElementById('admin-panel').classList.add('hidden');
@@ -961,35 +1004,56 @@ Leave empty to allow all countries"></textarea>
             
             try {
                 const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                currentAdmin = userCredential.user;
-                
-                // Check if user is admin (you can add more admin validation here)
-                const userDoc = await db.collection('adminUsers').doc(currentAdmin.uid).get();
-                
-                if (!userDoc.exists) {
-                    // Create admin user if doesn't exist
-                    await db.collection('adminUsers').doc(currentAdmin.uid).set({
-                        email: currentAdmin.email,
-                        name: currentAdmin.email.split('@')[0],
-                        role: 'admin',
-                        createdAt: new Date().toISOString(),
-                        lastLogin: new Date().toISOString()
-                    });
-                } else {
-                    // Update last login
-                    await db.collection('adminUsers').doc(currentAdmin.uid).update({
-                        lastLogin: new Date().toISOString()
-                    });
-                }
-                
-                hideLoading();
-                await loadAdminPanel();
+                await checkAdminAccess(userCredential.user);
                 
             } catch (error) {
                 hideLoading();
                 errorEl.querySelector('#error-message').textContent = error.message;
                 errorEl.classList.remove('hidden');
                 console.error('Login error:', error);
+            }
+        }
+        
+        async function createAdminUser() {
+            const email = prompt('Enter admin email:');
+            if (!email) return;
+            
+            const password = prompt('Enter admin password (min 6 characters):');
+            if (!password || password.length < 6) {
+                showToast('Password must be at least 6 characters', 'warning');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                // Create user in Firebase Auth
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                
+                // Add to adminUsers collection
+                await db.collection('adminUsers').doc(userCredential.user.uid).set({
+                    email: email,
+                    name: email.split('@')[0],
+                    role: 'super_admin',
+                    createdAt: new Date().toISOString(),
+                    permissions: ['all']
+                });
+                
+                // Initialize config if not exists
+                await initializeConfig();
+                
+                hideLoading();
+                showToast('Admin user created successfully! You can now login.', 'success');
+                
+                // Pre-fill login form
+                document.getElementById('login-email').value = email;
+                document.getElementById('login-password').focus();
+                
+            } catch (error) {
+                hideLoading();
+                document.getElementById('login-error').querySelector('#error-message').textContent = error.message;
+                document.getElementById('login-error').classList.remove('hidden');
+                console.error('Error creating admin user:', error);
             }
         }
         
@@ -1005,6 +1069,32 @@ Leave empty to allow all countries"></textarea>
             }
         }
         
+        // ===== INITIALIZE CONFIG =====
+        async function initializeConfig() {
+            try {
+                const configRef = db.collection('config').doc('main');
+                const configDoc = await configRef.get();
+                
+                if (!configDoc.exists) {
+                    await configRef.set({
+                        minWithdrawal: 1000,
+                        coinValueCoins: 1000,
+                        coinValueInr: 10,
+                        websitesToVisit: [],
+                        paymentMethods: ['bKash', 'Nagad', 'UPI', 'Paytm', 'PayPal'],
+                        allowedCountries: [],
+                        blockedCountryMessage: 'Sorry, this app is not available in your country.',
+                        lastWebsiteResetDate: new Date().toISOString().split('T')[0],
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    });
+                    console.log("Initial config created");
+                }
+            } catch (error) {
+                console.error('Error initializing config:', error);
+            }
+        }
+        
         // ===== ADMIN PANEL LOADING =====
         async function loadAdminPanel() {
             document.getElementById('login-modal').classList.add('hidden');
@@ -1017,6 +1107,9 @@ Leave empty to allow all countries"></textarea>
                 document.getElementById('admin-name').textContent = adminData.name || currentAdmin.email;
                 document.getElementById('admin-email').textContent = currentAdmin.email;
             }
+            
+            // Initialize config if needed
+            await initializeConfig();
             
             // Load initial data
             await loadDashboardData();
@@ -1091,8 +1184,8 @@ Leave empty to allow all countries"></textarea>
                 // Load total websites
                 const configDoc = await db.collection('config').doc('main').get();
                 if (configDoc.exists) {
-                    const config = configDoc.data();
-                    const websites = config.websitesToVisit || [];
+                    appConfig = configDoc.data();
+                    const websites = appConfig.websitesToVisit || [];
                     document.getElementById('total-websites').textContent = websites.length;
                 }
                 
@@ -1128,6 +1221,11 @@ Leave empty to allow all countries"></textarea>
                     .limit(5)
                     .get();
                 
+                if (snapshot.empty) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">No withdrawals yet</td></tr>';
+                    return;
+                }
+                
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     const date = new Date(data.requestedAt).toLocaleDateString();
@@ -1153,6 +1251,7 @@ Leave empty to allow all countries"></textarea>
                 
             } catch (error) {
                 console.error('Error loading recent withdrawals:', error);
+                tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-red-400">Error loading</td></tr>';
             }
         }
         
@@ -1165,6 +1264,11 @@ Leave empty to allow all countries"></textarea>
                     .orderBy('createdAt', 'desc')
                     .limit(5)
                     .get();
+                
+                if (snapshot.empty) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">No users yet</td></tr>';
+                    return;
+                }
                 
                 snapshot.forEach(doc => {
                     const data = doc.data();
@@ -1182,26 +1286,27 @@ Leave empty to allow all countries"></textarea>
                 
             } catch (error) {
                 console.error('Error loading recent users:', error);
+                tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-red-400">Error loading</td></tr>';
             }
         }
         
         // ===== WEBSITES MANAGEMENT =====
         async function loadWebsites() {
             const tbody = document.getElementById('websites-table');
-            tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center">Loading...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-400">Loading...</td></tr>';
             
             try {
                 const configDoc = await db.collection('config').doc('main').get();
                 if (!configDoc.exists) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center">No configuration found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-400">No configuration found</td></tr>';
                     return;
                 }
                 
-                const config = configDoc.data();
-                const websites = config.websitesToVisit || [];
+                appConfig = configDoc.data();
+                const websites = appConfig.websitesToVisit || [];
                 
                 if (websites.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center">No websites added yet</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-gray-400">No websites added yet</td></tr>';
                     return;
                 }
                 
@@ -1440,7 +1545,7 @@ Leave empty to allow all countries"></textarea>
         // ===== WITHDRAWALS MANAGEMENT =====
         async function loadWithdrawals(filter = 'pending') {
             const tbody = document.getElementById('withdrawals-table');
-            tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center">Loading...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-gray-400">Loading...</td></tr>';
             
             try {
                 let query = db.collection('withdrawals').orderBy('requestedAt', 'desc');
@@ -1452,7 +1557,7 @@ Leave empty to allow all countries"></textarea>
                 const snapshot = await query.get();
                 
                 if (snapshot.empty) {
-                    tbody.innerHTML = `<tr><td colspan="8" class="p-3 text-center">No ${filter} withdrawals found</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="8" class="p-3 text-center text-gray-400">No ${filter} withdrawals found</td></tr>`;
                     return;
                 }
                 
@@ -1582,7 +1687,7 @@ Leave empty to allow all countries"></textarea>
             const pageUsers = filteredUsers.slice(startIndex, endIndex);
             
             if (filteredUsers.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center">No users found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="p-3 text-center text-gray-400">No users found</td></tr>';
                 document.getElementById('users-pagination-info').textContent = 'Showing 0 of 0 users';
                 return;
             }
@@ -1778,24 +1883,12 @@ Leave empty to allow all countries"></textarea>
             try {
                 const configDoc = await db.collection('config').doc('main').get();
                 if (!configDoc.exists) {
-                    // Create default config
-                    const defaultConfig = {
-                        minWithdrawal: 1000,
-                        coinValueCoins: 1000,
-                        coinValueInr: 10,
-                        websitesToVisit: [],
-                        paymentMethods: ['bKash', 'Nagad', 'UPI', 'Paytm', 'PayPal'],
-                        allowedCountries: [],
-                        blockedCountryMessage: 'Sorry, this app is not available in your country.',
-                        lastWebsiteResetDate: new Date().toISOString().split('T')[0],
-                        createdAt: new Date().toISOString()
-                    };
-                    
-                    await db.collection('config').doc('main').set(defaultConfig);
-                    appConfig = defaultConfig;
-                } else {
-                    appConfig = configDoc.data();
+                    showToast('Config not found. Creating default...', 'warning');
+                    await initializeConfig();
+                    return;
                 }
+                
+                appConfig = configDoc.data();
                 
                 // Populate settings form
                 document.getElementById('min-withdrawal').value = appConfig.minWithdrawal || 1000;
@@ -1891,14 +1984,10 @@ Leave empty to allow all countries"></textarea>
                 
                 // Load coins earned today (estimated)
                 let coinsToday = 0;
-                const pointHistory = await db.collection('pointHistory')
-                    .where('timestamp', '>=', today)
-                    .get();
-                
-                pointHistory.forEach(doc => {
-                    const data = doc.data();
-                    if (data.points > 0) {
-                        coinsToday += data.points;
+                usersSnapshot.forEach(doc => {
+                    const userData = doc.data();
+                    if (userData.todayEarnings) {
+                        coinsToday += userData.todayEarnings;
                     }
                 });
                 
@@ -1925,21 +2014,25 @@ Leave empty to allow all countries"></textarea>
                 const countriesEl = document.getElementById('top-countries');
                 countriesEl.innerHTML = '';
                 
-                topCountries.forEach(([country, count]) => {
-                    const percentage = (count / usersSnapshot.size * 100).toFixed(1);
-                    countriesEl.innerHTML += `
-                        <div class="mb-4">
-                            <div class="flex justify-between mb-1">
-                                <span>${country === 'unknown' ? 'Unknown' : country.toUpperCase()}</span>
-                                <span class="font-semibold">${count} users (${percentage}%)</span>
+                if (topCountries.length === 0) {
+                    countriesEl.innerHTML = '<div class="text-gray-400">No country data available</div>';
+                } else {
+                    topCountries.forEach(([country, count]) => {
+                        const percentage = (count / usersSnapshot.size * 100).toFixed(1);
+                        countriesEl.innerHTML += `
+                            <div class="mb-4">
+                                <div class="flex justify-between mb-1">
+                                    <span>${country === 'unknown' ? 'Unknown' : country.toUpperCase()}</span>
+                                    <span class="font-semibold">${count} users (${percentage}%)</span>
+                                </div>
+                                <div class="w-full bg-gray-800 rounded-full h-2">
+                                    <div class="bg-gradient-to-r from-yellow-500 to-yellow-600 h-2 rounded-full" 
+                                         style="width: ${percentage}%"></div>
+                                </div>
                             </div>
-                            <div class="w-full bg-gray-800 rounded-full h-2">
-                                <div class="bg-gradient-to-r from-yellow-500 to-yellow-600 h-2 rounded-full" 
-                                     style="width: ${percentage}%"></div>
-                            </div>
-                        </div>
-                    `;
-                });
+                        `;
+                    });
+                }
                 
                 // Load activity chart (last 7 days)
                 const activityEl = document.getElementById('activity-chart');
@@ -2025,23 +2118,6 @@ Leave empty to allow all countries"></textarea>
                 toast.classList.remove('show');
             }, 3000);
         }
-        
-        // Add missing CSS classes
-        const style = document.createElement('style');
-        style.textContent = `
-            .btn-success {
-                background: linear-gradient(45deg, #34c759, #30d158);
-                color: white;
-                border: none;
-                transition: all 0.3s ease;
-            }
-            
-            .btn-success:hover {
-                background: linear-gradient(45deg, #30d158, #34c759);
-                transform: translateY(-2px);
-            }
-        `;
-        document.head.appendChild(style);
     </script>
 </body>
 </html>
